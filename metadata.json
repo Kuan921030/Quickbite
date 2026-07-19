@@ -1,0 +1,8 @@
+{
+  "name": "QuickBite",
+  "description": "A lunch decision assistant for NTU students to stop overthinking and start eating.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
