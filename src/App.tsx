@@ -246,21 +246,36 @@ export default function App() {
       hurry,
       refreshKey,
       userCoords,
+      activeSessionId,
     });
-  }, [budget, distance, cuisine, group, hurry, refreshKey, userCoords]);
+  }, [budget, distance, cuisine, group, hurry, refreshKey, userCoords, activeSessionId]);
+
+  // Handle start of recommendation flow from preferences page
+  const startRecommendationFlow = () => {
+    const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    setActiveSessionId(newSessionId);
+    setRefreshKey(0);
+    setStep('recommendations');
+  };
+
+  // Reset session and refresh key when going back to the home page
+  useEffect(() => {
+    if (step === 'welcome') {
+      setActiveSessionId(null);
+      setRefreshKey(0);
+    }
+  }, [step]);
 
   // Analytics Session and Event Logging Effects
   useEffect(() => {
-    if (step !== 'recommendations' || !currentUser) {
+    if (step !== 'recommendations' || !currentUser || !activeSessionId) {
       return;
     }
 
-    const currentSessionKey = `${budget}_${distance}_${cuisine}_${group}_${hurry}_${refreshKey}_${currentUser.username}`;
+    const currentSessionKey = `${budget}_${distance}_${cuisine}_${group}_${hurry}_${activeSessionId}_${currentUser.username}`;
 
     if (lastSessionKeyRef.current !== currentSessionKey) {
-      const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
       lastSessionKeyRef.current = currentSessionKey;
-      setActiveSessionId(newSessionId);
       loggedShownRef.current = {};
 
       const recommendedRestaurantIds = [
@@ -270,7 +285,7 @@ export default function App() {
       ].filter((id): id is string => typeof id === 'string');
 
       recommendationEventService.startSession({
-        id: newSessionId,
+        id: activeSessionId,
         userId: currentUser.username,
         budget,
         distance,
@@ -282,17 +297,17 @@ export default function App() {
 
       const restaurants = [getRecommendations.fast, getRecommendations.safe, getRecommendations.new];
       restaurants.forEach(r => {
-        if (r && !loggedShownRef.current[`shown_${newSessionId}_${r.restaurantId}`]) {
-          loggedShownRef.current[`shown_${newSessionId}_${r.restaurantId}`] = true;
+        if (r && !loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`]) {
+          loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`] = true;
           recommendationEventService.logEvent({
-            sessionId: newSessionId,
+            sessionId: activeSessionId,
             userId: currentUser.username,
             restaurantId: r.restaurantId,
             eventType: 'recommendation_shown'
           });
         }
       });
-    } else if (activeSessionId) {
+    } else {
       const restaurants = [getRecommendations.fast, getRecommendations.safe, getRecommendations.new];
       restaurants.forEach(r => {
         if (r && !loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`]) {
@@ -306,7 +321,7 @@ export default function App() {
         }
       });
     }
-  }, [step, currentUser, budget, distance, cuisine, group, hurry, refreshKey, getRecommendations, activeSessionId]);
+  }, [step, currentUser, budget, distance, cuisine, group, hurry, getRecommendations, activeSessionId]);
 
   useEffect(() => {
     if (step === 'rating' && lastPicked && currentUser && activeSessionId) {
@@ -436,7 +451,7 @@ export default function App() {
                 className="flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-black py-2 px-3 bg-neutral-100/80 hover:bg-neutral-200/85 rounded-xl transition-all cursor-pointer"
               >
                 <RefreshCw size={12} />
-                重新整理
+                為你重新挑選
               </button>
             ) : (
               <button
@@ -652,7 +667,7 @@ export default function App() {
 
             <div className="pt-4 pb-8">
               <button
-                onClick={() => setStep('recommendations')}
+                onClick={startRecommendationFlow}
                 className="w-full py-5 bg-neutral-900 text-white hover:bg-black rounded-3xl font-extrabold text-lg flex items-center justify-center gap-2 shadow-xl hover:shadow-2xl active:scale-95 transition-all cursor-pointer"
               >
                 <span>✨ 好了，幫我縮小猶豫圈！</span>
