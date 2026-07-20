@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper to check if user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper to check if user is the owner of the document
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Validation helper for User Profile
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['id', 'username', 'nickname', 'points', 'tier', 'mealsOrdered', 'visitedCount', 'createdAt', 'updatedAt'])
+        && data.id is string
+        && data.username is string
+        && data.nickname is string
+        && (data.points is int || data.points is float)
+        && data.tier is string
+        && (data.mealsOrdered is int || data.mealsOrdered is float)
+        && data.visitedCount is map
+        && data.createdAt is string
+        && data.updatedAt is string;
+    }
+
+    // Validation helper for RecommendationSession
+    function isValidSession(data, sessionId, authUid) {
+      return data.keys().hasAll(['id', 'userId', 'budget', 'distance', 'cuisine', 'group', 'hurry', 'recommendedRestaurantIds', 'createdAt'])
+        && data.id == sessionId
+        && data.userId == authUid
+        && (data.budget is int || data.budget is float)
+        && (data.distance is int || data.distance is float)
+        && data.cuisine is string
+        && data.group is string
+        && data.hurry is bool
+        && data.recommendedRestaurantIds is list
+        && data.createdAt is timestamp;
+    }
+
+    // Validation helper for RecommendationEvent
+    function isValidEvent(data, eventId, sessionId, authUid) {
+      return data.keys().hasAll(['id', 'sessionId', 'userId', 'restaurantId', 'eventType', 'createdAt'])
+        && data.id == eventId
+        && data.sessionId == sessionId
+        && data.userId == authUid
+        && data.restaurantId is string
+        && data.createdAt is timestamp
+        && (data.eventType in ['recommendation_shown', 'restaurant_opened', 'menu_opened', 'google_maps_clicked', 'rating_submitted', 'mock_order_completed'])
+        && (data.eventType == 'rating_submitted' ? (
+              (!data.keys().contains('ratingValue') || data.ratingValue is int) &&
+              (!data.keys().contains('waitTimeCategory') || data.waitTimeCategory is string)
+            ) : (
+              !data.keys().contains('ratingValue') && !data.keys().contains('waitTimeCategory')
+            ));
+    }
+
+    match /users/{userId} {
+      allow read, write: if true;
+
+      // Subcollection recommendationSessions rules
+      match /recommendationSessions/{sessionId} {
+        // Users can read and create their own sessions, no updates or deletes allowed
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidSession(request.resource.data, sessionId, request.auth.uid);
+
+        // Subcollection events rules
+        match /events/{eventId} {
+          // Users can read and create events in their sessions, no updates or deletes allowed
+          allow get, list: if isOwner(userId);
+          allow create: if isOwner(userId) && isValidEvent(request.resource.data, eventId, sessionId, request.auth.uid);
+        }
+      }
+    }
+  }
+}

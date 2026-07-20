@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   MapPin,
@@ -16,8 +16,10 @@ import {
 // Types & Repositories & Services
 import { Restaurant, UserSession } from './types/index';
 import { restaurantRepository } from './repositories/restaurantRepository';
+import { authRepository } from './repositories/index';
 import { userService } from './services/userService';
 import { recommendationService } from './services/recommendationService';
+import { recommendationEventService } from './services/recommendationEventService';
 
 // Utilities
 import { calculateDistanceInMeters, getFriendlyDistanceText } from './utils/index';
@@ -33,7 +35,129 @@ import { RestaurantCard } from './features/recommendations/RestaurantCard';
 import { MenuModal } from './features/restaurants/MenuModal';
 import { MemberCenter } from './features/auth/MemberCenter';
 
+let appRenderCount = 0;
+
+function isSessionEqual(s1: any, s2: any): boolean {
+  if (s1 === s2) return true;
+  if (!s1 || !s2) return false;
+  
+  if (s1.username !== s2.username) return false;
+  if (s1.points !== s2.points) return false;
+  if (s1.tier !== s2.tier) return false;
+  if (s1.nickname !== s2.nickname) return false;
+  if (s1.mealsOrdered !== s2.mealsOrdered) return false;
+  if (s1.photoURL !== s2.photoURL) return false;
+  
+  // Compare visitedCount
+  const keys1 = Object.keys(s1.visitedCount || {});
+  const keys2 = Object.keys(s2.visitedCount || {});
+  if (keys1.length !== keys2.length) return false;
+  for (const k of keys1) {
+    if (s1.visitedCount[k] !== s2.visitedCount[k]) return false;
+  }
+  
+  // Compare coupons
+  const c1 = s1.coupons || [];
+  const c2 = s2.coupons || [];
+  if (c1.length !== c2.length) return false;
+  for (let i = 0; i < c1.length; i++) {
+    if (c1[i].id !== c2[i].id) return false;
+    if (c1[i].status !== c2[i].status) return false;
+    if (c1[i].isUsed !== c2[i].isUsed) return false;
+  }
+  
+  return true;
+}
+
+function WelcomeHeaderClock() {
+  const [time, setTime] = useState<string>('12:00:00');
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setTime(now.toTimeString().split(' ')[0]);
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="font-mono text-xs font-bold text-neutral-800 bg-[#FFF3EB] px-2.5 py-1 rounded-full border border-orange-150">
+      ⏰ {time}
+    </div>
+  );
+}
+
+function MinutesLeftPrompt() {
+  const [minutesLeftText, setMinutesLeftText] = useState<string>('');
+
+  useEffect(() => {
+    const calculateText = () => {
+      const now = new Date();
+      const hr = now.getHours();
+      let text = '';
+      if (hr < 11) {
+        text = `離 12:00 午餐黃金開飯時間還有 ${60 - now.getMinutes()} 分鐘 🍽️`;
+      } else if (hr === 11) {
+        text = `距離 12:00 最強飯點還有 ${60 - now.getMinutes()} 分鐘，快物色好去處！🎯`;
+      } else if (hr === 12) {
+        text = `⚠️ 尖峰高熱：午餐黃金開飯已經過 ${now.getMinutes()} 分鐘！公館排隊潮火力全開 🔥`;
+      } else if (hr === 13) {
+        text = `⚠️ 已經 1 點了！距離下午工作/開工剩下約 ${
+          60 - now.getMinutes()
+        } 分鐘，不能再猶豫了！`;
+      } else {
+        text = `下午工作衝刺中，吃頓好料才能維持元氣！☕`;
+      }
+      setMinutesLeftText(text);
+    };
+
+    calculateText();
+    const interval = setInterval(calculateText, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="inline-flex gap-1.5 px-4 py-2 rounded-2xl bg-orange-100/50 text-[#C2410C] text-[11px] font-bold shadow-inner">
+      {minutesLeftText}
+    </div>
+  );
+}
+
+function RecommendationsTimeHeader() {
+  const [time, setTime] = useState<string>('12:00:00');
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setTime(now.toTimeString().split(' ')[0]);
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="space-y-2 bg-[#FFF3EB] p-4 rounded-3xl border border-orange-100/80 shadow-sm animate-pulse">
+      <p className="text-[10px] uppercase font-black text-brand-primary tracking-wider leading-none">
+        ⚡ 公館商圈校正情報
+      </p>
+      <div className="text-xs text-[#9A3412] font-semibold leading-relaxed">
+        ⏰ 飯點尖峰在 {time} 已火力拉滿！這 3 間是我們依據你的偏好，精確算出的【極速避開長排隊名單】
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  if (import.meta.env.DEV) {
+    appRenderCount++;
+    if (appRenderCount <= 50) {
+      console.log(`[Dev Audit] App render count: ${appRenderCount}`);
+    } else if (appRenderCount === 51) {
+      console.warn(`[Dev Audit] App rendered at extremely high frequency! Stopped logging.`);
+    }
+  }
+
   const [budget, setBudget] = useState(1); // Default to '~300' (index 1)
   const [distance, setDistance] = useState(1); // Default to '500m' (index 1)
   const [cuisine, setCuisine] = useState('全部'); // Default to '全部' (no cuisine filter)
@@ -46,9 +170,6 @@ export default function App() {
   const [showRatingFeedback, setShowRatingFeedback] = useState(false);
   const [selectedWaitTime, setSelectedWaitTime] = useState<'10' | '20' | '30'>('20');
   const [refreshKey, setRefreshKey] = useState(0);
-
-  // Live countdown and pressure clock states
-  const [currentTime, setCurrentTime] = useState<string>('12:00:00');
 
   // High climax picker states (roulette / slot-machine)
   const [isRolling, setIsRolling] = useState(false);
@@ -63,6 +184,11 @@ export default function App() {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'detecting' | 'success' | 'error'>('idle');
   const [gpsErrorMsg, setGpsErrorMsg] = useState<string>('');
+
+  // Analytics session and event logging tracking
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const loggedShownRef = useRef<Record<string, boolean>>({});
+  const lastSessionKeyRef = useRef<string>('');
 
   const requestGpsLocation = () => {
     if (!navigator.geolocation) {
@@ -100,45 +226,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(now.toTimeString().split(' ')[0]);
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
+    const unsubscribe = authRepository.subscribeToAuthState(async (userProfile) => {
+      if (userProfile) {
+        const saved = await userService.getUserSession();
+        setCurrentUser(prev => isSessionEqual(prev, saved) ? prev : saved);
+      } else {
+        setCurrentUser(prev => prev === null ? prev : null);
+      }
+    });
+    return () => unsubscribe();
   }, []);
-
-  const minutesLeft = useMemo(() => {
-    const now = new Date();
-    const hr = now.getHours();
-    if (hr < 11) {
-      return `離 12:00 午餐黃金開飯時間還有 ${60 - now.getMinutes()} 分鐘 🍽️`;
-    } else if (hr === 11) {
-      return `距離 12:00 最強飯點還有 ${60 - now.getMinutes()} 分鐘，快物色好去處！🎯`;
-    } else if (hr === 12) {
-      return `⚠️ 尖峰高熱：午餐黃金開飯已經過 ${now.getMinutes()} 分鐘！公館排隊潮火力全開 🔥`;
-    } else if (hr === 13) {
-      return `⚠️ 已經 1 點了！距離下午工作/開工剩下約 ${
-        60 - now.getMinutes()
-      } 分鐘，不能再猶豫了！`;
-    } else {
-      return `下午工作衝刺中，吃頓好料才能維持元氣！☕`;
-    }
-  }, [currentTime]);
-
-  useEffect(() => {
-    const saved = userService.getUserSession();
-    if (saved) {
-      setCurrentUser(saved);
-    }
-  }, []);
-
-  const handleOrderCompleted = (restaurantName: string) => {
-    if (!currentUser) return;
-    const updated = userService.recordOrder(currentUser, restaurantName);
-    setCurrentUser(updated);
-  };
 
   const getRecommendations = useMemo(() => {
     return recommendationService.getRecommendations({
@@ -151,6 +248,112 @@ export default function App() {
       userCoords,
     });
   }, [budget, distance, cuisine, group, hurry, refreshKey, userCoords]);
+
+  // Analytics Session and Event Logging Effects
+  useEffect(() => {
+    if (step !== 'recommendations' || !currentUser) {
+      return;
+    }
+
+    const currentSessionKey = `${budget}_${distance}_${cuisine}_${group}_${hurry}_${refreshKey}_${currentUser.username}`;
+
+    if (lastSessionKeyRef.current !== currentSessionKey) {
+      const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      lastSessionKeyRef.current = currentSessionKey;
+      setActiveSessionId(newSessionId);
+      loggedShownRef.current = {};
+
+      const recommendedRestaurantIds = [
+        getRecommendations.fast?.restaurantId,
+        getRecommendations.safe?.restaurantId,
+        getRecommendations.new?.restaurantId
+      ].filter((id): id is string => typeof id === 'string');
+
+      recommendationEventService.startSession({
+        id: newSessionId,
+        userId: currentUser.username,
+        budget,
+        distance,
+        cuisine,
+        group,
+        hurry,
+        recommendedRestaurantIds
+      });
+
+      const restaurants = [getRecommendations.fast, getRecommendations.safe, getRecommendations.new];
+      restaurants.forEach(r => {
+        if (r && !loggedShownRef.current[`shown_${newSessionId}_${r.restaurantId}`]) {
+          loggedShownRef.current[`shown_${newSessionId}_${r.restaurantId}`] = true;
+          recommendationEventService.logEvent({
+            sessionId: newSessionId,
+            userId: currentUser.username,
+            restaurantId: r.restaurantId,
+            eventType: 'recommendation_shown'
+          });
+        }
+      });
+    } else if (activeSessionId) {
+      const restaurants = [getRecommendations.fast, getRecommendations.safe, getRecommendations.new];
+      restaurants.forEach(r => {
+        if (r && !loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`]) {
+          loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`] = true;
+          recommendationEventService.logEvent({
+            sessionId: activeSessionId,
+            userId: currentUser.username,
+            restaurantId: r.restaurantId,
+            eventType: 'recommendation_shown'
+          });
+        }
+      });
+    }
+  }, [step, currentUser, budget, distance, cuisine, group, hurry, refreshKey, getRecommendations, activeSessionId]);
+
+  useEffect(() => {
+    if (step === 'rating' && lastPicked && currentUser && activeSessionId) {
+      const key = `opened_${activeSessionId}_${lastPicked.restaurantId}`;
+      if (!loggedShownRef.current[key]) {
+        loggedShownRef.current[key] = true;
+        recommendationEventService.logEvent({
+          sessionId: activeSessionId,
+          userId: currentUser.username,
+          restaurantId: lastPicked.restaurantId,
+          eventType: 'restaurant_opened'
+        });
+      }
+    }
+  }, [step, lastPicked, currentUser, activeSessionId]);
+
+  useEffect(() => {
+    if (selectedForMenu && currentUser && activeSessionId) {
+      const key = `menu_${activeSessionId}_${selectedForMenu.restaurantId}`;
+      if (!loggedShownRef.current[key]) {
+        loggedShownRef.current[key] = true;
+        recommendationEventService.logEvent({
+          sessionId: activeSessionId,
+          userId: currentUser.username,
+          restaurantId: selectedForMenu.restaurantId,
+          eventType: 'menu_opened'
+        });
+      }
+    }
+  }, [selectedForMenu, currentUser, activeSessionId]);
+
+  const handleOrderCompleted = async (restaurantName: string) => {
+    if (!currentUser) return;
+    const updated = await userService.recordOrder(currentUser, restaurantName);
+    setCurrentUser(updated);
+
+    const matchedRestaurant = restaurantRepository.getAllRestaurants().find(r => r.name === restaurantName);
+    const restaurantId = matchedRestaurant?.restaurantId || lastPicked?.restaurantId || '';
+    if (activeSessionId && restaurantId) {
+      recommendationEventService.logEvent({
+        sessionId: activeSessionId,
+        userId: currentUser.username,
+        restaurantId,
+        eventType: 'mock_order_completed'
+      });
+    }
+  };
 
   const handleDecideForMe = () => {
     if (isRolling) return;
@@ -264,15 +467,11 @@ export default function App() {
                   <span>公館飯點熱度：</span>
                   <span className="text-red-500">🔥🔥 爆滿警報</span>
                 </div>
-                <div className="font-mono text-xs font-bold text-neutral-800 bg-[#FFF3EB] px-2.5 py-1 rounded-full border border-orange-150">
-                  ⏰ {currentTime}
-                </div>
+                <WelcomeHeaderClock />
               </div>
 
               {/* Stress prompt */}
-              <div className="inline-flex gap-1.5 px-4 py-2 rounded-2xl bg-orange-100/50 text-[#C2410C] text-[11px] font-bold shadow-inner">
-                {minutesLeft}
-              </div>
+              <MinutesLeftPrompt />
             </div>
 
             {/* Core Foodie Hero */}
@@ -474,14 +673,7 @@ export default function App() {
             <div className="h-4" />
 
             <div className="px-6 space-y-6">
-              <div className="space-y-2 bg-[#FFF3EB] p-4 rounded-3xl border border-orange-100/80 shadow-sm animate-pulse">
-                <p className="text-[10px] uppercase font-black text-brand-primary tracking-wider leading-none">
-                  ⚡ 公館商圈校正情報
-                </p>
-                <div className="text-xs text-[#9A3412] font-semibold leading-relaxed">
-                  ⏰ 飯點尖峰在 {currentTime} 已火力拉滿！這 3 間是我們依據你的偏好，精確算出的【極速避開長排隊名單】
-                </div>
-              </div>
+              <RecommendationsTimeHeader />
 
               <div className="space-y-1">
                 <h2 className="text-2xl font-black text-neutral-950 tracking-tight">
@@ -505,6 +697,16 @@ export default function App() {
                     setSelectedForMenu(r);
                     setMenuReadOnly(true);
                   }}
+                  onGoogleMapsClick={() => {
+                    if (currentUser && activeSessionId && getRecommendations.fast) {
+                      recommendationEventService.logEvent({
+                        sessionId: activeSessionId,
+                        userId: currentUser.username,
+                        restaurantId: getRecommendations.fast.restaurantId,
+                        eventType: 'google_maps_clicked'
+                      });
+                    }
+                  }}
                   userCoords={userCoords}
                 />
                 <RestaurantCard
@@ -519,6 +721,16 @@ export default function App() {
                     setSelectedForMenu(r);
                     setMenuReadOnly(true);
                   }}
+                  onGoogleMapsClick={() => {
+                    if (currentUser && activeSessionId && getRecommendations.safe) {
+                      recommendationEventService.logEvent({
+                        sessionId: activeSessionId,
+                        userId: currentUser.username,
+                        restaurantId: getRecommendations.safe.restaurantId,
+                        eventType: 'google_maps_clicked'
+                      });
+                    }
+                  }}
                   userCoords={userCoords}
                 />
                 <RestaurantCard
@@ -532,6 +744,16 @@ export default function App() {
                   onOpenMenu={r => {
                     setSelectedForMenu(r);
                     setMenuReadOnly(true);
+                  }}
+                  onGoogleMapsClick={() => {
+                    if (currentUser && activeSessionId && getRecommendations.new) {
+                      recommendationEventService.logEvent({
+                        sessionId: activeSessionId,
+                        userId: currentUser.username,
+                        restaurantId: getRecommendations.new.restaurantId,
+                        eventType: 'google_maps_clicked'
+                      });
+                    }
                   }}
                   userCoords={userCoords}
                 />
@@ -680,6 +902,16 @@ export default function App() {
                       )}`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => {
+                        if (currentUser && activeSessionId && lastPicked) {
+                          recommendationEventService.logEvent({
+                            sessionId: activeSessionId,
+                            userId: currentUser.username,
+                            restaurantId: lastPicked.restaurantId,
+                            eventType: 'google_maps_clicked'
+                          });
+                        }
+                      }}
                       className="w-full py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 border border-red-100/50"
                     >
                       <MapPin size={16} className="fill-red-200" />
@@ -728,11 +960,23 @@ export default function App() {
                         <button
                           key={i}
                           className="flex flex-col items-center gap-1 p-3 bg-neutral-50 hover:bg-orange-50 hover:text-brand-primary rounded-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer border border-neutral-100/50"
-                          onClick={() => {
+                          onClick={async () => {
                             setShowRatingFeedback(true);
                             if (currentUser) {
-                              const updated = userService.addPoints(currentUser, 50); // Award 50 points for rating feedback
+                              // MVP_DEMO_ONLY: Awarding points client-side. In production, rating feedback submission and associated points must be processed securely by the server.
+                              const updated = await userService.addPoints(currentUser, 50); // Award 50 points for rating feedback
                               setCurrentUser(updated);
+
+                              if (activeSessionId && lastPicked) {
+                                recommendationEventService.logEvent({
+                                  sessionId: activeSessionId,
+                                  userId: currentUser.username,
+                                  restaurantId: lastPicked.restaurantId,
+                                  eventType: 'rating_submitted',
+                                  ratingValue: i + 1,
+                                  waitTimeCategory: selectedWaitTime
+                                });
+                              }
                             }
                           }}
                         >
@@ -846,11 +1090,15 @@ export default function App() {
         readOnly={menuReadOnly}
       />
 
-      <MemberCenter
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        onLoginStateChange={u => setCurrentUser(u)}
-      />
+      <AnimatePresence>
+        {showProfileModal && (
+          <MemberCenter
+            onClose={() => setShowProfileModal(false)}
+            currentUser={currentUser}
+            onLoginStateChange={setCurrentUser}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

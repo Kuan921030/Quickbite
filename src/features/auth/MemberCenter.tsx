@@ -15,95 +15,92 @@ import {
   CheckCircle2,
   Tag,
   ChefHat,
+  RefreshCw,
 } from 'lucide-react';
 import { UserSession } from '../../types/index';
 import { userService } from '../../services/userService';
+import { authRepository } from '../../repositories/index';
 
 interface MemberCenterProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
+  currentUser: UserSession | null;
   onLoginStateChange?: (user: UserSession | null) => void;
 }
+
+let memberCenterRenderCount = 0;
 
 export const MemberCenter = ({
   isOpen,
   onClose,
+  currentUser,
   onLoginStateChange,
 }: MemberCenterProps) => {
-  const [user, setUser] = useState<UserSession | null>(null);
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
-
-  // Form state
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [nicknameInput, setNicknameInput] = useState('');
+  const user = currentUser;
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Local storage load
-  useEffect(() => {
-    const savedUser = userService.getUserSession();
-    if (savedUser) {
-      setUser(savedUser);
-      if (onLoginStateChange) onLoginStateChange(savedUser);
+  if (import.meta.env.DEV) {
+    memberCenterRenderCount++;
+    if (memberCenterRenderCount <= 50) {
+      console.log(`[Dev Audit] MemberCenter render count: ${memberCenterRenderCount}`);
+    } else if (memberCenterRenderCount === 51) {
+      console.warn(`[Dev Audit] MemberCenter rendered at extremely high frequency! Stopped logging.`);
     }
-  }, []);
+  }
 
-  const saveAndSyncUserSession = (u: UserSession | null) => {
-    setUser(u);
-    userService.saveUserSession(u);
+  const saveAndSyncUserSession = async (u: UserSession | null) => {
+    await userService.saveUserSession(u);
     if (onLoginStateChange) onLoginStateChange(u);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
-      setErrorMsg('請輸入帳號密碼！');
-      return;
-    }
-
-    const mockUser = userService.login(email);
+  const handleGoogleLogin = async () => {
+    setIsLoggingIn(true);
     setErrorMsg('');
-    saveAndSyncUserSession(mockUser);
-    setSuccessMsg('登入成功！');
-    setTimeout(() => setSuccessMsg(''), 1500);
+    setSuccessMsg('');
+    try {
+      await authRepository.signInWithGoogle();
+      setSuccessMsg('登入成功！');
+      setTimeout(() => setSuccessMsg(''), 2000);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Google 登入失敗');
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password || !nicknameInput) {
-      setErrorMsg('請填寫所有註冊欄位！');
+  const triggerOneClickDemo = async () => {
+    // Only available in dev mode
+    if (!import.meta.env.DEV) {
+      setErrorMsg('Demo 帳號僅限於開發環境測試使用！');
       return;
     }
-
-    const mockUser = userService.register(email, nicknameInput);
-    setErrorMsg('');
-    saveAndSyncUserSession(mockUser);
-    setIsRegisterMode(false);
-    setSuccessMsg('註冊並登入成功！');
-    setTimeout(() => setSuccessMsg(''), 1500);
-  };
-
-  const triggerOneClickDemo = () => {
-    const demoUser = userService.loadDemoUser();
-    saveAndSyncUserSession(demoUser);
+    const demoUser = await userService.loadDemoUser();
+    await saveAndSyncUserSession(demoUser);
     setSuccessMsg('已成功載入台大航太系 demo 帳號！');
     setTimeout(() => setSuccessMsg(''), 1500);
   };
 
-  const handleLogOut = () => {
-    saveAndSyncUserSession(null);
-    setEmail('');
-    setPassword('');
-    setNicknameInput('');
+  const handleLogOut = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await authRepository.signOut();
+      setSuccessMsg('已成功登出！');
+      setTimeout(() => setSuccessMsg(''), 1500);
+    } catch (err: any) {
+      setErrorMsg(err.message || '登出失敗');
+    }
   };
 
   // Redeem point to coupon
-  const handleRedeemCoupon = () => {
+  // MVP_DEMO_ONLY: Future secure point deduction and coupon generation must be processed by trusted backend
+  const handleRedeemCoupon = async () => {
     if (!user) return;
     try {
-      const { user: updatedUser, coupon } = userService.redeemCoupon(user);
-      saveAndSyncUserSession(updatedUser);
+      const { user: updatedUser, coupon } = await userService.redeemCoupon(user);
+      await saveAndSyncUserSession(updatedUser);
       setSuccessMsg(`成功兌換 [ ${coupon.name} ] 優惠券優惠！`);
       setTimeout(() => setSuccessMsg(''), 2500);
     } catch (err: any) {
@@ -113,10 +110,11 @@ export const MemberCenter = ({
   };
 
   // Consume coupon
-  const handleUseCoupon = (id: string, name: string) => {
+  // MVP_DEMO_ONLY: Coupon consumption verification and status update must be handled securely on the server
+  const handleUseCoupon = async (id: string, name: string) => {
     if (!user) return;
-    const updatedUser = userService.useCoupon(user, id);
-    saveAndSyncUserSession(updatedUser);
+    const updatedUser = await userService.useCoupon(user, id);
+    await saveAndSyncUserSession(updatedUser);
     
     // Find matching coupon code
     const matchedCoupon = user.coupons.find(c => c.id === id);
@@ -133,21 +131,24 @@ export const MemberCenter = ({
     ? Math.min(100, (user.points / maxPointsForLevel) * 100)
     : 0;
 
-  if (!isOpen) return null;
-
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex justify-center items-end sm:items-center p-0 sm:p-4" id="member-center-overlay">
-        {/* Overlay touch close */}
-        <div className="absolute inset-0" onClick={onClose} />
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex justify-center items-end sm:items-center p-0 sm:p-4"
+      id="member-center-overlay"
+    >
+      {/* Overlay touch close */}
+      <div className="absolute inset-0" onClick={onClose} />
 
-        <motion.div
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-          className="relative bg-white w-full max-w-lg rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[85vh] flex flex-col z-[105]"
-        >
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+        className="relative bg-white w-full max-w-lg rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[85vh] flex flex-col z-[105]"
+      >
           {/* Header */}
           <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between sticky top-0 bg-white z-10">
             <div className="flex items-center gap-2">
@@ -186,9 +187,18 @@ export const MemberCenter = ({
                   </div>
 
                   <div className="flex items-center gap-4 relative z-10">
-                    <div className="w-14 h-14 rounded-full bg-brand-primary flex items-center justify-center font-bold text-xl text-white shadow-md animate-pulse">
-                      {user.nickname[0] || 'U'}
-                    </div>
+                    {user.photoURL ? (
+                      <img 
+                        src={user.photoURL} 
+                        alt={user.nickname} 
+                        className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-md"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-full bg-brand-primary flex items-center justify-center font-bold text-xl text-white shadow-md">
+                        {user.nickname[0] || 'U'}
+                      </div>
+                    )}
                     <div>
                       <div className="flex items-center gap-1.5">
                         <h3 className="font-bold text-lg">{user.nickname}</h3>
@@ -225,6 +235,12 @@ export const MemberCenter = ({
                       <span>還差 {maxPointsForLevel - user.points} 點升級</span>
                     </div>
                   </div>
+                </div>
+
+                {/* MVP_DEMO_ONLY: Show disclaimer for test-phase coupons and points */}
+                <div className="bg-orange-50/80 text-[#C2410C] text-[11px] font-bold p-3.5 rounded-2xl border border-orange-100/50 flex items-center gap-2 leading-relaxed shadow-sm">
+                  <span className="text-sm shrink-0">ℹ️</span>
+                  <span>目前為測試版體驗點數與示範優惠券，尚不具實際兌換價值。</span>
                 </div>
 
                 {/* Coupons Section */}
@@ -407,115 +423,75 @@ export const MemberCenter = ({
                 </div>
               </div>
             ) : (
-              // Login / Register UI
+              // Login UI with Google Auth
               <div className="space-y-6">
                 <div className="text-center space-y-2 py-4">
                   <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-brand-primary mx-auto">
                     <User size={24} />
                   </div>
                   <h3 className="text-lg font-bold text-neutral-800">
-                    {isRegisterMode
-                      ? '加入 QuickBite 吃貨俱樂部'
-                      : '歡迎回來吃午餐'}
+                    歡迎來到吃午餐
                   </h3>
                   <p className="text-xs text-neutral-400 max-w-xs mx-auto">
-                    登入即可享有個人用餐口味精準分析、集點兌換台大校園與公館商圈特約名店折價券！
+                    透過 Google 帳號登入即可享有個人用餐口味精準分析、集點兌換台大校園與公館商圈特約名店折價券！
                   </p>
                 </div>
 
-                <form
-                  onSubmit={isRegisterMode ? handleRegister : handleLogin}
-                  className="space-y-4"
-                >
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-neutral-400 block">
-                      電子郵件 / 帳號
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="e.g. ntu_student@email.com"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      className="w-full px-4 py-3 bg-neutral-50 border border-neutral-100 focus:border-brand-primary outline-none transition-colors rounded-xl text-sm"
-                    />
-                  </div>
+                <div className="space-y-4">
+                  <button
+                    onClick={handleGoogleLogin}
+                    disabled={isLoggingIn}
+                    className={`w-full py-4 border border-neutral-200 hover:bg-neutral-50 rounded-2xl font-bold text-sm tracking-wide transition-all cursor-pointer flex items-center justify-center gap-3 shadow-sm ${
+                      isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isLoggingIn ? (
+                      <>
+                        <RefreshCw size={18} className="animate-spin text-neutral-500" />
+                        <span className="text-neutral-600">登入處理中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                        </svg>
+                        <span className="text-neutral-700">使用 Google 帳號快速登入</span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-neutral-400 block">
-                      設定密碼
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="請輸入密碼"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 bg-[#FAFAFA] border border-neutral-100 focus:border-brand-primary outline-none transition-colors rounded-xl text-sm"
-                    />
-                  </div>
-
-                  {isRegisterMode && (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-neutral-400 block">
-                        會員暱稱嗎？
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="例如：生機系王大明"
-                        value={nicknameInput}
-                        onChange={e => setNicknameInput(e.target.value)}
-                        className="w-full px-4 py-3 bg-neutral-50 border border-neutral-100 focus:border-brand-primary outline-none transition-colors rounded-xl text-sm"
-                      />
+                {/* Easy demo trigger for local development only */}
+                {import.meta.env.DEV && (
+                  <>
+                    {/* Divider */}
+                    <div className="relative flex items-center justify-center my-4">
+                      <div className="w-full border-t border-neutral-100"></div>
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase bg-white px-3 absolute">
+                        開發測試工具 (Development Only)
+                      </span>
                     </div>
-                  )}
 
-                  <button
-                    type="submit"
-                    className="w-full py-4 bg-black text-white rounded-2xl font-bold text-sm tracking-wide hover:bg-neutral-800 transition-colors cursor-pointer mt-2"
-                  >
-                    {isRegisterMode ? '註冊新帳號' : '登入會員'}
-                  </button>
-                </form>
-
-                {/* Switch Login Register Modes */}
-                <div className="text-center pt-2">
-                  <button
-                    onClick={() => {
-                      setIsRegisterMode(!isRegisterMode);
-                      setErrorMsg('');
-                    }}
-                    className="text-xs text-neutral-400 font-bold hover:text-neutral-700"
-                  >
-                    {isRegisterMode
-                      ? '已有帳號？點此快速登入'
-                      : '還不是會員嗎？點此 5 秒鐘註冊'}
-                  </button>
-                </div>
-
-                {/* Divider */}
-                <div className="relative flex items-center justify-center my-4">
-                  <div className="w-full border-t border-neutral-100"></div>
-                  <span className="text-[10px] font-bold text-neutral-400 uppercase bg-white px-3 absolute">
-                    或者快速體驗
-                  </span>
-                </div>
-
-                {/* Easy demo trigger */}
-                <button
-                  onClick={triggerOneClickDemo}
-                  className="w-full py-4 bg-orange-50 hover:bg-orange-100 border border-orange-100 text-brand-primary rounded-2xl font-bold text-sm tracking-wide transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <Flame
-                    size={16}
-                    className="fill-brand-primary/20 animate-bounce"
-                  />
-                  一鍵體驗「台大航太郭小明」經典帳號
-                </button>
+                    <button
+                      onClick={triggerOneClickDemo}
+                      className="w-full py-4 bg-orange-50 hover:bg-orange-100 border border-orange-100 text-brand-primary rounded-2xl font-bold text-sm tracking-wide transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <Flame
+                        size={16}
+                        className="fill-brand-primary/20 animate-bounce"
+                      />
+                      一鍵體驗「台大航太郭小明」經典帳號
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
         </motion.div>
-      </div>
-    </AnimatePresence>
+    </motion.div>
   );
 };
 export default MemberCenter;

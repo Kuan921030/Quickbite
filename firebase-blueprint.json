@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with points, tier, and stats",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique Firebase UID of the user" },
+        "username": { "type": "string", "description": "The email address of the user" },
+        "nickname": { "type": "string", "description": "The nickname or display name of the user" },
+        "points": { "type": "integer", "description": "Reward points balance" },
+        "tier": { "type": "string", "description": "Membership tier" },
+        "mealsOrdered": { "type": "integer", "description": "Number of meals ordered" },
+        "visitedCount": { "type": "object", "description": "Map of restaurant ID to visit count" },
+        "photoURL": { "type": "string", "description": "The avatar URL of the user" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last updated timestamp" }
+      },
+      "required": ["id", "username", "nickname", "points", "tier"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Store authentic user profiles by user ID"
+    }
+  }
+}

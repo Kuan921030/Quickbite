@@ -9,6 +9,7 @@ interface RestaurantCardProps {
   type: 'fast' | 'safe' | 'new';
   onSelect: (r: Restaurant) => void;
   onOpenMenu: (r: Restaurant) => void;
+  onGoogleMapsClick?: () => void;
   userCoords: { lat: number; lng: number } | null;
 }
 
@@ -17,6 +18,7 @@ export const RestaurantCard = ({
   type,
   onSelect,
   onOpenMenu,
+  onGoogleMapsClick,
   userCoords
 }: RestaurantCardProps) => {
   const typeLabel = {
@@ -154,6 +156,7 @@ export const RestaurantCard = ({
             target="_blank"
             rel="noopener noreferrer"
             title="在 Google 地圖中搜尋"
+            onClick={() => onGoogleMapsClick?.()}
             className="p-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition-all rounded-2xl flex items-center justify-center cursor-pointer active:scale-95"
           >
             <MapPin size={18} className="text-red-500 fill-red-200" />

@@ -48,6 +48,7 @@ export const MenuModal = ({
     }));
   };
 
+  // MVP_DEMO_ONLY: Simulate order completion. In the future, this should call a trusted backend API for order placement and point tracking
   const handleOrder = () => {
     setIsOrdering(true);
     setTimeout(() => {
@@ -218,6 +219,9 @@ export const MenuModal = ({
                     </>
                   )}
                 </button>
+                <p className="text-[10.5px] text-neutral-400 text-center font-bold mt-1 leading-normal">
+                  ℹ️ 此為功能測試流程，不會產生真實訂單或付款。
+                </p>
               </div>
             )}
 
