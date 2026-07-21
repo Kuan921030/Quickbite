@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Zap, CheckCircle2, Sparkles, Clock, MapPin } from 'lucide-react';
 import { Restaurant } from '../../types/index';
 import { calculateDistanceInMeters, getFriendlyDistanceText, getBuddyQuote } from '../../utils/index';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
@@ -138,17 +139,21 @@ export const RestaurantCard = ({
         <div className="flex gap-2.5 pt-2">
           <button
             onClick={() => onSelect(restaurant)}
-            className="flex-[1.4] bg-neutral-900 text-white hover:bg-black py-4 rounded-2xl font-bold text-sm transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+            className={`${
+              FEATURE_FLAGS.menuPreview ? 'flex-[1.4]' : 'flex-1'
+            } bg-neutral-900 text-white hover:bg-black py-4 rounded-2xl font-bold text-sm transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5`}
           >
             <CheckCircle2 size={16} className="text-[#FF8A00]" />
             今天吃這間
           </button>
-          <button
-            onClick={() => onOpenMenu(restaurant)}
-            className="flex-1 bg-orange-50 hover:bg-orange-100 text-brand-primary py-4 rounded-2xl font-bold text-sm transition-colors active:scale-95 cursor-pointer"
-          >
-            看菜單瀏覽
-          </button>
+          {FEATURE_FLAGS.menuPreview && (
+            <button
+              onClick={() => onOpenMenu(restaurant)}
+              className="flex-1 bg-orange-50 hover:bg-orange-100 text-brand-primary py-4 rounded-2xl font-bold text-sm transition-colors active:scale-95 cursor-pointer"
+            >
+              看菜單瀏覽
+            </button>
+          )}
           <a
             href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
               restaurant.name + ' ' + restaurant.location

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, MapPin, Clock, ArrowRight, RefreshCw, X, ShoppingCart } from 'lucide-react';
+import { Sparkles, MapPin, Clock, ArrowRight, RefreshCw, X, ShoppingCart, CheckCircle2 } from 'lucide-react';
 import { Restaurant } from '../../types/index';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 import { restaurantRepository } from '../../repositories/restaurantRepository';
 import { calculateDistanceInMeters, getFriendlyDistanceText } from '../../utils/index';
 
@@ -249,32 +250,58 @@ export function HelpMeDecideAnimator({
 
               {/* Action Stack */}
               <div className="space-y-2 pt-2">
-                <button
-                  onClick={() => onOpenMenu(scrollRestaurant)}
-                  className="w-full py-4 bg-[#FF5C00] hover:bg-[#FF6C15] text-white rounded-2xl font-black text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20"
-                >
-                  <ShoppingCart size={16} />🛒 查看菜單並點餐 (可下單)
-                </button>
+                {FEATURE_FLAGS.ordering ? (
+                  <>
+                    <button
+                      onClick={() => onOpenMenu(scrollRestaurant)}
+                      className="w-full py-4 bg-[#FF5C00] hover:bg-[#FF6C15] text-white rounded-2xl font-black text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-[#FF5C00]/20"
+                    >
+                      <ShoppingCart size={16} />🛒 查看菜單並點餐 (可下單)
+                    </button>
 
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    scrollRestaurant.name + ' ' + scrollRestaurant.location
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 bg-neutral-800 hover:bg-neutral-700 text-white rounded-2xl font-bold text-xs tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 border border-neutral-700"
-                >
-                  <MapPin size={14} className="text-red-400 fill-red-400/20" />
-                  直接前往 Google 地圖
-                </a>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        scrollRestaurant.name + ' ' + scrollRestaurant.location
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 bg-neutral-800 hover:bg-neutral-700 text-white rounded-2xl font-bold text-xs tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 border border-neutral-700"
+                    >
+                      <MapPin size={14} className="text-red-400 fill-red-400/20" />
+                      直接前往 Google 地圖
+                    </a>
 
-                <button
-                  onClick={() => onSelectRestaurant(scrollRestaurant)}
-                  className="w-full py-3 bg-transparent text-neutral-300 hover:text-white rounded-2xl font-black text-xs tracking-wide transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  用餐後評分反饋拿積分
-                  <ArrowRight size={14} />
-                </button>
+                    <button
+                      onClick={() => onSelectRestaurant(scrollRestaurant)}
+                      className="w-full py-3 bg-transparent text-neutral-300 hover:text-white rounded-2xl font-black text-xs tracking-wide transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      用餐後評分反饋拿積分
+                      <ArrowRight size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => onSelectRestaurant(scrollRestaurant)}
+                      className="w-full py-4 bg-[#FF5C00] hover:bg-[#FF6C15] text-white rounded-2xl font-black text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-[#FF5C00]/20"
+                    >
+                      <CheckCircle2 size={16} className="text-white" />
+                      今天吃這間
+                    </button>
+
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        scrollRestaurant.name + ' ' + scrollRestaurant.location
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3.5 bg-neutral-800 hover:bg-neutral-700 text-white rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 border border-neutral-700"
+                    >
+                      <MapPin size={14} className="text-red-400 fill-red-400/20" />
+                      直接前往 Google 地圖
+                    </a>
+                  </>
+                )}
               </div>
 
               {/* Rerun option */}

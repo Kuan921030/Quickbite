@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingCart, Plus, Minus, CheckCircle2, RefreshCw, X, Utensils, ShoppingBag, Zap } from 'lucide-react';
 import { Restaurant } from '../../types/index';
 import { restaurantRepository } from '../../repositories/restaurantRepository';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 
 interface MenuModalProps {
   restaurant: Restaurant | null;
@@ -26,6 +27,8 @@ export const MenuModal = ({
   
   const dummyMenuItems = restaurantRepository.getMenuItems();
 
+  const isReadOnlyMode = readOnly || !FEATURE_FLAGS.ordering;
+
   useEffect(() => {
     if (isOpen) {
       setCart({});
@@ -42,6 +45,7 @@ export const MenuModal = ({
   }, [cart, dummyMenuItems]);
 
   const updateCart = (id: number, delta: number) => {
+    if (!FEATURE_FLAGS.cart) return;
     setCart(prev => ({
       ...prev,
       [id]: Math.max(0, (prev[id] || 0) + delta)
@@ -50,6 +54,7 @@ export const MenuModal = ({
 
   // MVP_DEMO_ONLY: Simulate order completion. In the future, this should call a trusted backend API for order placement and point tracking
   const handleOrder = () => {
+    if (!FEATURE_FLAGS.ordering || !FEATURE_FLAGS.checkout) return;
     setIsOrdering(true);
     setTimeout(() => {
       setIsOrdering(false);
@@ -60,6 +65,7 @@ export const MenuModal = ({
     }, 1500);
   };
 
+  if (!FEATURE_FLAGS.menuPreview && !FEATURE_FLAGS.ordering) return null;
   if (!restaurant) return null;
 
   return (
@@ -93,7 +99,7 @@ export const MenuModal = ({
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {ordered ? (
+              {ordered && FEATURE_FLAGS.ordering ? (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -117,7 +123,7 @@ export const MenuModal = ({
                 <>
                   <div className="space-y-4">
                     <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-2">
-                      <Utensils size={14} /> {readOnly ? '精選餐點瀏覽（唯讀）' : '精選餐點'}
+                      <Utensils size={14} /> {isReadOnlyMode ? '精選餐點瀏覽（唯讀）' : '精選餐點'}
                     </p>
                     {dummyMenuItems.map(item => (
                       <div
@@ -129,7 +135,7 @@ export const MenuModal = ({
                           <p className="text-xs text-neutral-500 mt-1">{item.description}</p>
                           <p className="text-brand-primary font-bold mt-2">${item.price}</p>
                         </div>
-                        {!readOnly && (
+                        {!isReadOnlyMode && FEATURE_FLAGS.cart && (
                           <div className="flex items-center gap-3 bg-white p-1 rounded-2xl border border-neutral-100">
                             <button
                               onClick={() => updateCart(item.id, -1)}
@@ -164,7 +170,7 @@ export const MenuModal = ({
               )}
             </div>
 
-            {!ordered && !readOnly && (
+            {!ordered && !isReadOnlyMode && FEATURE_FLAGS.ordering && (
               <div className="p-6 bg-white border-t border-neutral-50 space-y-4">
                 {/* Takeout / Dinein Switch Slider */}
                 <div className="flex items-center justify-between gap-4 bg-neutral-50 p-2.5 rounded-2xl border border-neutral-100">
@@ -225,7 +231,7 @@ export const MenuModal = ({
               </div>
             )}
 
-            {readOnly && (
+            {(isReadOnlyMode || !FEATURE_FLAGS.ordering) && (
               <div className="p-6 bg-white border-t border-neutral-50">
                 <button
                   onClick={onClose}

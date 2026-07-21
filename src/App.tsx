@@ -36,6 +36,7 @@ import { MenuModal } from './features/restaurants/MenuModal';
 import { MemberCenter } from './features/auth/MemberCenter';
 import { HelpMeDecideAnimator } from './components/animators/HelpMeDecideAnimator';
 import { HelpMePickOneAnimator } from './components/animators/HelpMePickOneAnimator';
+import { FEATURE_FLAGS } from './config/featureFlags';
 
 let appRenderCount = 0;
 
@@ -168,6 +169,18 @@ export default function App() {
   const [step, setStep] = useState<'welcome' | 'preferences' | 'recommendations' | 'rating'>('welcome');
   const [selectedForMenu, setSelectedForMenu] = useState<Restaurant | null>(null);
   const [menuReadOnly, setMenuReadOnly] = useState(false);
+
+  const openMenu = (restaurant: Restaurant | null, readOnly: boolean = false) => {
+    if (restaurant === null) {
+      setSelectedForMenu(null);
+      return;
+    }
+    if (readOnly && !FEATURE_FLAGS.menuPreview) return;
+    if (!readOnly && !FEATURE_FLAGS.ordering) return;
+    
+    setSelectedForMenu(restaurant);
+    setMenuReadOnly(readOnly);
+  };
   const [lastPicked, setLastPicked] = useState<Restaurant | null>(null);
   const [showRatingFeedback, setShowRatingFeedback] = useState(false);
   const [selectedWaitTime, setSelectedWaitTime] = useState<'10' | '20' | '30'>('20');
@@ -538,7 +551,7 @@ export default function App() {
                   </span>
                 </h1>
                 <p className="text-neutral-500 font-medium text-sm px-6 leading-relaxed">
-                  別再滑 Google Maps 十分鐘了。只為你嚴選台大公館最對味的三間，不求多、只求快，30秒內直接出發！
+                  別再滑 Google Maps 十分鐘了。從台大周邊餐廳，為你挑出最適合的三間，不求多、只求快，30秒內直接出發！
                 </p>
               </div>
             </div>
@@ -727,8 +740,7 @@ export default function App() {
                     setStep('rating');
                   }}
                   onOpenMenu={r => {
-                    setSelectedForMenu(r);
-                    setMenuReadOnly(true);
+                    openMenu(r, true);
                   }}
                   onGoogleMapsClick={() => {
                     if (currentUser && activeSessionId && getRecommendations.fast) {
@@ -751,8 +763,7 @@ export default function App() {
                     setStep('rating');
                   }}
                   onOpenMenu={r => {
-                    setSelectedForMenu(r);
-                    setMenuReadOnly(true);
+                    openMenu(r, true);
                   }}
                   onGoogleMapsClick={() => {
                     if (currentUser && activeSessionId && getRecommendations.safe) {
@@ -775,8 +786,7 @@ export default function App() {
                     setStep('rating');
                   }}
                   onOpenMenu={r => {
-                    setSelectedForMenu(r);
-                    setMenuReadOnly(true);
+                    openMenu(r, true);
                   }}
                   onGoogleMapsClick={() => {
                     if (currentUser && activeSessionId && getRecommendations.new) {
@@ -895,38 +905,63 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Actions in Decision Page */}
+                   {/* Actions in Decision Page */}
                   <div className="space-y-2">
-                    <button
-                      onClick={() => {
-                        setSelectedForMenu(lastPicked);
-                        setMenuReadOnly(false);
-                      }}
-                      className="w-full py-4 bg-[#FF5C00] text-white hover:bg-[#E05300] rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-orange-500/10"
-                    >
-                      <ShoppingCart size={16} />🛒 查看菜單並點餐 (可下單)
-                    </button>
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                        lastPicked.name + ' ' + lastPicked.location
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => {
-                        if (currentUser && activeSessionId && lastPicked) {
-                          recommendationEventService.logEvent({
-                            sessionId: activeSessionId,
-                            userId: currentUser.username,
-                            restaurantId: lastPicked.restaurantId,
-                            eventType: 'google_maps_clicked'
-                          });
-                        }
-                      }}
-                      className="w-full py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 border border-red-100/50"
-                    >
-                      <MapPin size={16} className="fill-red-200" />
-                      直接前往 Google 地圖
-                    </a>
+                    {FEATURE_FLAGS.ordering ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            openMenu(lastPicked, false);
+                          }}
+                          className="w-full py-4 bg-[#FF5C00] text-white hover:bg-[#E05300] rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-orange-500/10"
+                        >
+                          <ShoppingCart size={16} />🛒 查看菜單並點餐 (可下單)
+                        </button>
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                            lastPicked.name + ' ' + lastPicked.location
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => {
+                            if (currentUser && activeSessionId && lastPicked) {
+                              recommendationEventService.logEvent({
+                                sessionId: activeSessionId,
+                                userId: currentUser.username,
+                                restaurantId: lastPicked.restaurantId,
+                                eventType: 'google_maps_clicked'
+                              });
+                            }
+                          }}
+                          className="w-full py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 border border-red-100/50"
+                        >
+                          <MapPin size={16} className="fill-red-200" />
+                          直接前往 Google 地圖
+                        </a>
+                      </>
+                    ) : (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                          lastPicked.name + ' ' + lastPicked.location
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          if (currentUser && activeSessionId && lastPicked) {
+                            recommendationEventService.logEvent({
+                              sessionId: activeSessionId,
+                              userId: currentUser.username,
+                              restaurantId: lastPicked.restaurantId,
+                              eventType: 'google_maps_clicked'
+                            });
+                          }
+                        }}
+                        className="w-full py-4 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                      >
+                        <MapPin size={16} className="fill-red-200" />
+                        直接前往 Google 地圖
+                      </a>
+                    )}
                   </div>
 
                   {/* Expecting Wait Time Selector */}
@@ -1092,13 +1127,15 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <MenuModal
-        isOpen={!!selectedForMenu}
-        restaurant={selectedForMenu}
-        onClose={() => setSelectedForMenu(null)}
-        onOrderCompleted={handleOrderCompleted}
-        readOnly={menuReadOnly}
-      />
+      {FEATURE_FLAGS.menuPreview && (
+        <MenuModal
+          isOpen={!!selectedForMenu}
+          restaurant={selectedForMenu}
+          onClose={() => openMenu(null)}
+          onOrderCompleted={handleOrderCompleted}
+          readOnly={menuReadOnly}
+        />
+      )}
 
       <AnimatePresence>
         {showProfileModal && (
@@ -1122,8 +1159,7 @@ export default function App() {
           setIsHelpMeDecideOpen(false);
         }}
         onOpenMenu={(r) => {
-          setSelectedForMenu(r);
-          setMenuReadOnly(false);
+          openMenu(r, false);
         }}
         onRerun={handleTriggerHelpMeDecide}
       />
