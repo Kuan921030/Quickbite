@@ -30,7 +30,6 @@ import { getPriceRangeText } from './utils/budget';
 import { BudgetSelector } from './components/BudgetSelector';
 import { DistanceSelector } from './components/DistanceSelector';
 import { CuisineSelector } from './components/CuisineSelector';
-import { HurrySelector } from './components/HurrySelector';
 
 // Feature Components
 import { RestaurantCard } from './features/recommendations/RestaurantCard';
@@ -147,7 +146,7 @@ function RecommendationsTimeHeader() {
         ⚡ 公館商圈校正情報
       </p>
       <div className="text-xs text-[#9A3412] font-semibold leading-relaxed">
-        ⏰ 飯點尖峰在 {time} 已火力拉滿！這 3 間是我們依據你的偏好，精確算出的【極速避開長排隊名單】
+        ⏰ 飯點尖峰在 {time} 已火力拉滿！這 3 間是我們依據你的偏好，為您挑選的最佳推薦名單
       </div>
     </div>
   );
@@ -765,10 +764,6 @@ export default function App() {
                 />
               </section>
 
-              {/* Hurry Selector */}
-              <section className="space-y-4">
-                <HurrySelector value={hurry} onChange={setHurry} />
-              </section>
             </div>
 
             <div className="pt-4 pb-8">
@@ -951,18 +946,18 @@ export default function App() {
                         本次出餐等待時間：
                         <span className="text-brand-primary font-bold">
                           {selectedWaitTime === '10'
-                            ? '10分鐘內'
+                            ? '10 分鐘內'
                             : selectedWaitTime === '20'
-                            ? '20分鐘內'
-                            : '30分鐘內'}
+                            ? '10–25 分鐘'
+                            : '25 分鐘以上'}
                         </span>
                       </p>
                       <p className="text-neutral-400 text-[11px]">
-                        體驗數據已回傳至吃貨校正核心！
+                        資料已安全儲存
                       </p>
                     </div>
                     <p className="text-neutral-500 text-xs px-4 leading-relaxed">
-                      謝謝您的真實出餐速度與美味回饋！這將大幅協助 AI 系統進行推薦引擎的精準度調整，為您與全體會員提供更完美的午餐指引。
+                      感謝回報，這些資料將協助我們改善未來的推薦。
                     </p>
                   </div>
                   <button
@@ -997,8 +992,6 @@ export default function App() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                     <div className="absolute bottom-3 left-3 text-white text-[11px] font-medium flex items-center gap-2">
-                      <span>約 {lastPicked.estimatedDiningTime} 分鐘</span>
-                      <span>•</span>
                       <span>
                         {getFriendlyDistanceText(
                           calculateDistanceInMeters(lastPicked.coordinates, userCoords)
@@ -1078,9 +1071,9 @@ export default function App() {
                     </p>
                     <div className="grid grid-cols-3 gap-2 px-1">
                       {[
-                        { id: '10', label: '10分鐘內' },
-                        { id: '20', label: '20分鐘內' },
-                        { id: '30', label: '30分鐘內' },
+                        { id: '10', label: '10 分鐘內' },
+                        { id: '20', label: '10–25 分鐘' },
+                        { id: '30', label: '25 分鐘以上' },
                       ].map(item => (
                         <button
                           key={item.id}

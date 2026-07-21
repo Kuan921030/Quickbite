@@ -224,8 +224,6 @@ export function HelpMeDecideAnimator({
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                   <div className="absolute bottom-3 left-3 text-white text-[11px] font-bold flex items-center gap-1.5 bg-neutral-950/60 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-neutral-800">
-                    <span>約 {scrollRestaurant.estimatedDiningTime} 分鐘</span>
-                    <span>•</span>
                     <span>
                       {getFriendlyDistanceText(
                         calculateDistanceInMeters(scrollRestaurant.coordinates, userCoords)

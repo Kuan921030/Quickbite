@@ -71,18 +71,14 @@ export const recommendationService = {
 
     const restaurants = restaurantRepository.getAllRestaurants();
 
-    // 1. Filter base pool of restaurants based on group size & hurry preferences
+    // 1. Filter base pool of restaurants based on group size
     let basePool = restaurants.filter(r => {
       if (group === '一人食' && !r.onePerson) return false;
       if (group === '約會' && !r.dating) return false;
       if (group === '朋友聚餐' && !r.gathering) return false;
-      if (hurry && !r.fastServe) return false;
       return true;
     });
 
-    if (basePool.length === 0) {
-      basePool = restaurants.filter(r => !hurry || r.fastServe);
-    }
     if (basePool.length === 0) {
       basePool = restaurants;
     }
@@ -145,11 +141,6 @@ export const recommendationService = {
         score += 10;
       } else if (dist <= 1000) {
         score += 5;
-      }
-
-      // Hurry/fast service matching bonus
-      if (hurry && r.fastServe) {
-        score += 15;
       }
 
       return { restaurant: r, score };

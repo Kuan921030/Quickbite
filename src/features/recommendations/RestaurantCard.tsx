@@ -25,11 +25,16 @@ export const RestaurantCard = ({
 }: RestaurantCardProps) => {
   if (!restaurant) return null;
 
+  const dist = calculateDistanceInMeters(restaurant.coordinates, userCoords);
+  const friendlyPrice = getPriceRangeText(restaurant.price);
+
+  const isClose = dist !== null && dist <= 300;
+
   const typeLabel = {
     fast: {
-      label: '⚡ 趕時間？這間出餐最穩！',
+      label: isClose ? '📍 完美距離！散步就能抵達' : '🎯 嚴選推薦！符合你的料理選擇',
       color: 'from-[#FF5C00] to-[#FF8A00] text-white shadow-orange-500/20',
-      icon: Zap
+      icon: isClose ? MapPin : Sparkles
     },
     safe: {
       label: '😋 穩中之穩！閉著眼睛選都對味',
@@ -42,9 +47,6 @@ export const RestaurantCard = ({
       icon: Sparkles
     }
   }[type];
-
-  const dist = calculateDistanceInMeters(restaurant.coordinates, userCoords);
-  const friendlyPrice = getPriceRangeText(restaurant.price);
 
   return (
     <motion.div
@@ -111,26 +113,19 @@ export const RestaurantCard = ({
             老饕悄悄話
           </div>
           <p className="text-neutral-700 text-xs sm:text-xs leading-relaxed font-semibold">
-            「 {getBuddyQuote(restaurant.name, type)} 」
+            「 {getBuddyQuote(restaurant.name, type, dist)} 」
           </p>
         </div>
 
         {/* Real life metrics */}
-        <div className="grid grid-cols-3 gap-2 py-2 border-y border-neutral-100/70 text-center">
+        <div className="grid grid-cols-2 gap-4 py-2 border-y border-neutral-100/70 text-center">
           <div className="space-y-0.5">
-            <p className="text-[10px] uppercase font-bold text-neutral-400">出餐大約</p>
-            <p className="text-xs font-bold text-neutral-700 flex items-center justify-center gap-1">
-              <Clock size={11} className="text-brand-primary animate-pulse" />
-              {restaurant.estimatedDiningTime} 分鐘
-            </p>
-          </div>
-          <div className="space-y-0.5 border-x border-neutral-100">
             <p className="text-[10px] uppercase font-bold text-neutral-400">距離約</p>
             <p className="text-xs font-bold text-[#E05300] flex items-center justify-center gap-1.5 leading-none">
               {getFriendlyDistanceText(dist)}
             </p>
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 border-l border-neutral-100">
             <p className="text-[10px] uppercase font-bold text-neutral-400">消費預算</p>
             <p className="text-xs font-bold text-brand-primary">💰 {friendlyPrice}</p>
           </div>
