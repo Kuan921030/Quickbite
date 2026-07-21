@@ -12,6 +12,9 @@ import {
   Clock,
   ShoppingCart,
   ArrowLeft,
+  Utensils,
+  Coffee,
+  Compass,
 } from 'lucide-react';
 
 // Types & Repositories & Services
@@ -26,6 +29,7 @@ import { recommendationEventService } from './services/recommendationEventServic
 import { calculateDistanceInMeters, getFriendlyDistanceText } from './utils/index';
 import { getPriceRangeText } from './utils/budget';
 import { isEligibleForMainMeal } from './utils/mealEligibility';
+import { getDiningPeriod, DINING_PERIOD_CONFIGS, DiningPeriod } from './utils/diningPeriod';
 
 // Shared Components
 import { BudgetSelector } from './components/BudgetSelector';
@@ -74,81 +78,111 @@ function isSessionEqual(s1: any, s2: any): boolean {
   return true;
 }
 
-function WelcomeHeaderClock() {
-  const [time, setTime] = useState<string>('12:00:00');
+function DiningPeriodBanner() {
+  const [now, setNow] = useState(new Date());
+
   useEffect(() => {
     const updateTime = () => {
-      const now = new Date();
-      setTime(now.toTimeString().split(' ')[0]);
+      setNow(new Date());
     };
     updateTime();
-    const interval = setInterval(updateTime, 1000);
+    const interval = setInterval(updateTime, 60000);
     return () => clearInterval(interval);
   }, []);
 
-  return (
-    <div className="font-mono text-xs font-bold text-neutral-800 bg-[#FFF3EB] px-2.5 py-1 rounded-full border border-orange-150">
-      ⏰ {time}
-    </div>
-  );
-}
+  const period = getDiningPeriod(now);
+  const config = DINING_PERIOD_CONFIGS[period];
 
-function MinutesLeftPrompt() {
-  const [minutesLeftText, setMinutesLeftText] = useState<string>('');
+  const formatTime = (date: Date) => {
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
 
-  useEffect(() => {
-    const calculateText = () => {
-      const now = new Date();
-      const hr = now.getHours();
-      let text = '';
-      if (hr < 11) {
-        text = `離 12:00 午餐黃金開飯時間還有 ${60 - now.getMinutes()} 分鐘 🍽️`;
-      } else if (hr === 11) {
-        text = `距離 12:00 最強飯點還有 ${60 - now.getMinutes()} 分鐘，快物色好去處！🎯`;
-      } else if (hr === 12) {
-        text = `⚠️ 尖峰高熱：午餐黃金開飯已經過 ${now.getMinutes()} 分鐘！公館排隊潮火力全開 🔥`;
-      } else if (hr === 13) {
-        text = `⚠️ 已經 1 點了！距離下午工作/開工剩下約 ${
-          60 - now.getMinutes()
-        } 分鐘，不能再猶豫了！`;
-      } else {
-        text = `下午工作衝刺中，吃頓好料才能維持元氣！☕`;
-      }
-      setMinutesLeftText(text);
-    };
+  const renderIcon = () => {
+    const size = 18;
+    switch (config.icon) {
+      case 'utensils':
+        return <Utensils size={size} className={config.tone === 'peak' ? 'text-amber-600' : 'text-neutral-500'} aria-hidden="true" />;
+      case 'coffee':
+        return <Coffee size={size} className="text-neutral-500" aria-hidden="true" />;
+      case 'clock':
+        return <Clock size={size} className={config.tone === 'peak' ? 'text-amber-600' : 'text-neutral-500'} aria-hidden="true" />;
+      case 'compass':
+        return <Compass size={size} className="text-neutral-500" aria-hidden="true" />;
+      default:
+        return <Clock size={size} className="text-neutral-500" aria-hidden="true" />;
+    }
+  };
 
-    calculateText();
-    const interval = setInterval(calculateText, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const isPeak = config.tone === 'peak';
 
   return (
-    <div className="inline-flex gap-1.5 px-4 py-2 rounded-2xl bg-orange-100/50 text-[#C2410C] text-[11px] font-bold shadow-inner">
-      {minutesLeftText}
+    <div 
+      className={`w-full p-4 rounded-3xl border transition-colors duration-500 ${
+        isPeak 
+          ? 'bg-amber-50/90 border-amber-200/70 shadow-sm text-left' 
+          : 'bg-neutral-50/90 border-neutral-200/50 shadow-sm text-left'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2">
+          {renderIcon()}
+          <span className={`text-sm font-black tracking-tight ${isPeak ? 'text-amber-800' : 'text-neutral-800'}`}>
+            {config.title}
+          </span>
+          <span 
+            className={`w-2 h-2 rounded-full ${
+              isPeak ? 'bg-amber-500 animate-pulse' : 'bg-neutral-400'
+            }`} 
+          />
+        </div>
+        <div className={`font-mono text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+          isPeak 
+            ? 'bg-amber-100/60 text-amber-800 border-amber-200/40' 
+            : 'bg-neutral-100 text-neutral-600 border-neutral-200/40'
+        }`}>
+          現在 {formatTime(now)}
+        </div>
+      </div>
+      <p className={`text-xs font-medium leading-relaxed ${isPeak ? 'text-amber-700/90' : 'text-neutral-500'}`}>
+        {config.description}
+      </p>
     </div>
   );
 }
 
 function RecommendationsTimeHeader() {
-  const [time, setTime] = useState<string>('12:00:00');
+  const [now, setNow] = useState(new Date());
+
   useEffect(() => {
     const updateTime = () => {
-      const now = new Date();
-      setTime(now.toTimeString().split(' ')[0]);
+      setNow(new Date());
     };
     updateTime();
-    const interval = setInterval(updateTime, 1000);
+    const interval = setInterval(updateTime, 60000);
     return () => clearInterval(interval);
   }, []);
 
+  const period = getDiningPeriod(now);
+
+  const getText = () => {
+    switch (period) {
+      case 'lunch_peak':
+        return '🍴 午餐尖峰時段 · 先選好再出發，少一點現場猶豫';
+      case 'afternoon_off_peak':
+        return '☕ 午後離峰時段 · 適合探索平常較少嘗試的餐廳';
+      case 'dinner_peak':
+        return '🕒 晚餐尖峰時段 · 現在先決定下一站';
+      case 'general_off_peak':
+      default:
+        return '📍 一般離峰時段 · 出發前建議確認店家營業資訊';
+    }
+  };
+
   return (
-    <div className="space-y-2 bg-[#FFF3EB] p-4 rounded-3xl border border-orange-100/80 shadow-sm animate-pulse">
-      <p className="text-[10px] uppercase font-black text-brand-primary tracking-wider leading-none">
-        ⚡ 公館商圈校正情報
-      </p>
-      <div className="text-xs text-[#9A3412] font-semibold leading-relaxed">
-        ⏰ 飯點尖峰在 {time} 已火力拉滿！這 3 間是我們依據你的偏好，為您挑選的最佳推薦名單
-      </div>
+    <div className="text-[11.5px] font-semibold text-neutral-400 tracking-tight leading-normal">
+      {getText()}
     </div>
   );
 }
@@ -566,19 +600,9 @@ export default function App() {
             exit={{ opacity: 0, scale: 0.95 }}
             className="min-h-screen flex flex-col justify-between p-6 text-center bg-gradient-to-b from-[#FFFDFB] via-[#FFF8F1] to-[#FFEFE0] text-neutral-800"
           >
-            {/* Top Crisis Tracker */}
-            <div className="pt-4 space-y-3">
-              <div className="flex items-center justify-between bg-white/80 backdrop-blur-md p-3 px-4 rounded-3xl border border-orange-100/60 shadow-sm">
-                <div className="flex items-center gap-1.5 text-xs text-neutral-600 font-bold">
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-                  <span>公館飯點熱度：</span>
-                  <span className="text-red-500">🔥🔥 爆滿警報</span>
-                </div>
-                <WelcomeHeaderClock />
-              </div>
-
-              {/* Stress prompt */}
-              <MinutesLeftPrompt />
+            {/* Top Dining Period Tracker */}
+            <div className="pt-4">
+              <DiningPeriodBanner />
             </div>
 
             {/* Core Foodie Hero */}
@@ -619,14 +643,14 @@ export default function App() {
 
               <div className="space-y-4 max-w-sm">
                 <h1 className="text-4xl sm:text-4xl font-black tracking-tight leading-snug font-display text-neutral-900">
-                  今天中午又不知道
+                  現在又不知道
                   <br />
                   <span className="text-brand-primary underline decoration-dashed decoration-brand-secondary/40">
-                    吃什麼了嗎？
+                    要吃什麼了嗎？
                   </span>
                 </h1>
                 <p className="text-neutral-500 font-medium text-sm px-6 leading-relaxed">
-                  別再滑 Google Maps 十分鐘了。從台大周邊餐廳，為你挑出最適合的三間，不求多、只求快，30秒內直接出發！
+                  別再滑 Google Maps 十分鐘了。從台大與公館周邊精選餐廳，為你挑出最適合的三間，不求多、只求快，30秒內直接出發！
                 </p>
               </div>
             </div>
@@ -644,7 +668,7 @@ export default function App() {
               </motion.button>
 
               <p className="text-neutral-400 text-xs font-semibold">
-                「 只花 30 秒下決定，把剩下的 50 分鐘留給午休 ☕ 」
+                「 只花 30 秒下決定，把多餘時間留給休息與生活 ☕ 」
               </p>
             </div>
           </motion.div>
@@ -656,34 +680,33 @@ export default function App() {
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -50 }}
-            className="p-6 space-y-10 bg-gradient-to-b from-[#FFFDFB] to-[#FFF9F3] min-h-screen"
+            className="p-6 space-y-6 bg-gradient-to-b from-[#FFFDFB] to-[#FFF9F3] min-h-screen"
           >
-            <div className="pt-8 flex justify-between items-center gap-4">
-              <div>
-                <span className="text-xs bg-[#FFF3EB] text-[#FF5C00] font-extrabold px-3 py-1 rounded-full border border-orange-100 shadow-sm inline-block mb-2">
-                  Step 1. 客製你的今日防線
-                </span>
-                <h2 className="text-2xl min-[365px]:text-3xl font-black text-neutral-900 tracking-tight leading-snug">
-                  今天中午，
+            <div className="pt-4 grid grid-cols-10 gap-4 items-center mb-[28px]">
+              <div className="col-span-6">
+                <h2 className="text-2xl min-[360px]:text-3xl font-black text-neutral-900 tracking-tight leading-[1.15]">
+                  這餐，
                   <br />
-                  <span className="text-neutral-400">想吃什麼感覺的？</span>
+                  想怎麼吃？
                 </h2>
               </div>
-              <motion.button
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleTriggerHelpMeDecide}
-                className="flex flex-col items-center justify-center gap-1.5 p-3.5 px-4 bg-gradient-to-br from-neutral-900 to-neutral-800 text-white rounded-2xl shadow-xl shadow-neutral-950/20 cursor-pointer select-none border-2 border-[#FF8A00] shrink-0 relative overflow-hidden group"
-                id="pref-decide-for-me-btn"
-              >
-                {/* Subtle shine effect */}
-                <div className="absolute inset-0 w-1/2 h-full bg-white/10 skew-x-[-25deg] -translate-x-full group-hover:translate-x-[300%] transition-transform duration-1000 ease-out" />
-                <span className="text-2xl animate-pulse">🎲</span>
-                <span className="text-[11px] font-black tracking-wider whitespace-nowrap text-[#FF8A00]">幫我決定</span>
-              </motion.button>
+              <div className="col-span-4 flex justify-end">
+                <motion.button
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleTriggerHelpMeDecide}
+                  className="flex flex-col items-center justify-center gap-1.5 p-3.5 px-4 bg-gradient-to-br from-neutral-900 to-neutral-800 text-white rounded-2xl shadow-xl shadow-neutral-950/20 cursor-pointer select-none border-2 border-[#FF8A00] shrink-0 relative overflow-hidden group"
+                  id="pref-decide-for-me-btn"
+                >
+                  {/* Subtle shine effect */}
+                  <div className="absolute inset-0 w-1/2 h-full bg-white/10 skew-x-[-25deg] -translate-x-full group-hover:translate-x-[300%] transition-transform duration-1000 ease-out" />
+                  <span className="text-2xl animate-pulse">🎲</span>
+                  <span className="text-[11px] font-black tracking-wider whitespace-nowrap text-[#FF8A00]">幫我決定</span>
+                </motion.button>
+              </div>
             </div>
 
-            <div className="space-y-8">
+            <div className="space-y-6">
               {/* Group */}
               <section className="space-y-3.5">
                 <label className="text-xs font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
@@ -1223,7 +1246,7 @@ export default function App() {
 
               <div className="text-[11px] font-semibold text-neutral-400 max-w-xs mx-auto leading-relaxed">
                 「
-                放心，我們正在秒速篩除低分雷店、公館排隊爆滿熱區、以及不符合你今日荷包預算的店家...
+                放心，我們正在依據你的餐飲喜好、距離範圍、以及今日荷包預算篩選最理想的店家...
                 」
               </div>
             </div>
