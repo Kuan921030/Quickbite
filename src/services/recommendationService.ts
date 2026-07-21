@@ -1,6 +1,7 @@
 import { restaurantRepository } from '../repositories/restaurantRepository';
 import { Restaurant, Recommendation } from '../types/index';
 import { calculateDistanceInMeters, matchCuisine } from '../utils/index';
+import { matchesBudget, BudgetOption } from '../utils/budget';
 
 // Simple seed-based pseudo-random number generator
 function createSeededRandom(seedStr: string) {
@@ -87,8 +88,9 @@ export const recommendationService = {
     }
 
     // 2. Filter base pool by budget, distance, and cuisine
+    const bOption = budget as BudgetOption;
     let pool = basePool.filter(r => {
-      if (r.price > (budget + 1)) return false;
+      if (!matchesBudget(r.price, bOption)) return false;
 
       const dist = calculateDistanceInMeters(r.coordinates, userCoords);
       if (distance === 0 && dist > 120) return false;
@@ -100,30 +102,27 @@ export const recommendationService = {
       return true;
     });
 
-    // Relaxation path for empty pool to ensure App never fails to recommend
+    // Relaxation phase 1: If empty, try matchesBudget and matchesCuisine, but relax distance limits
     if (pool.length === 0) {
       pool = basePool.filter(r => {
+        if (!matchesBudget(r.price, bOption)) return false;
         if (!matchCuisine(r.rawGenre, cuisine)) return false;
-        if (r.price > (budget + 1)) return false;
-        const dist = calculateDistanceInMeters(r.coordinates, userCoords);
-        if (distance === 0 && dist > 120) return false;
-        if (distance === 1 && dist > 550) return false;
-        if (distance === 2 && dist > 1200) return false;
         return true;
       });
     }
 
+    // Relaxation phase 2: If still empty, relax cuisine restriction too, only enforce matchesBudget
     if (pool.length === 0) {
-      pool = basePool.filter(r => matchCuisine(r.rawGenre, cuisine) && r.price <= (budget + 1));
+      pool = basePool.filter(r => {
+        return matchesBudget(r.price, bOption);
+      });
     }
 
+    // Relaxation phase 3: If still empty, relax group / speed constraints but strictly enforce matchesBudget
     if (pool.length === 0) {
-      pool = basePool.filter(r => matchCuisine(r.rawGenre, cuisine));
-    }
-
-    if (pool.length === 0) {
-      const cuisineOnly = basePool.filter(r => matchCuisine(r.rawGenre, cuisine));
-      pool = cuisineOnly.length > 0 ? cuisineOnly : basePool;
+      pool = restaurants.filter(r => {
+        return matchesBudget(r.price, bOption);
+      });
     }
 
     // 3. Calculate recommendation score for each restaurant in the pool
@@ -146,13 +145,6 @@ export const recommendationService = {
         score += 10;
       } else if (dist <= 1000) {
         score += 5;
-      }
-
-      // Budget alignment bonus
-      if (r.price === budget) {
-        score += 15;
-      } else if (r.price < budget) {
-        score += 8;
       }
 
       // Hurry/fast service matching bonus
@@ -231,21 +223,39 @@ export const recommendationService = {
       }
     }
 
-    // Fallback in case pool has extremely few items and we couldn't fulfill 3 slots
-    if (!fastRes) {
-      fastRes = pool[0] || restaurants[0];
-    }
-    if (!safeRes) {
-      safeRes = pool[Math.min(1, pool.length - 1)] || fastRes;
-    }
-    if (!newRes) {
-      newRes = pool[Math.min(2, pool.length - 1)] || safeRes;
+    // Deduplicate and filter selected/fallback values to make sure everything is budget compliant and unique
+    const finalResults: (Restaurant | null)[] = [fastRes, safeRes, newRes];
+    const uniqueCompliant = new Set<string>();
+    const cleanedResults: (Restaurant | null)[] = [null, null, null];
+    
+    let targetIdx = 0;
+    for (const res of finalResults) {
+      if (res && matchesBudget(res.price, bOption) && !uniqueCompliant.has(res.restaurantId)) {
+        uniqueCompliant.add(res.restaurantId);
+        cleanedResults[targetIdx++] = res;
+      }
     }
 
+    // Fill remaining slots with unique, budget-compliant restaurants from the sorted pool if available
+    if (uniqueCompliant.size < 3) {
+      const sortedPool = scoredPool.map(c => c.restaurant);
+      for (const res of sortedPool) {
+        if (uniqueCompliant.size >= 3) break;
+        if (res && matchesBudget(res.price, bOption) && !uniqueCompliant.has(res.restaurantId)) {
+          uniqueCompliant.add(res.restaurantId);
+          cleanedResults[targetIdx++] = res;
+        }
+      }
+    }
+
+    fastRes = cleanedResults[0];
+    safeRes = cleanedResults[1];
+    newRes = cleanedResults[2];
+
     // Add selected items to the short session history of recently recommended IDs
-    addToHistory(fastRes.restaurantId);
-    addToHistory(safeRes.restaurantId);
-    addToHistory(newRes.restaurantId);
+    if (fastRes) addToHistory(fastRes.restaurantId);
+    if (safeRes) addToHistory(safeRes.restaurantId);
+    if (newRes) addToHistory(newRes.restaurantId);
 
     return {
       fast: fastRes,

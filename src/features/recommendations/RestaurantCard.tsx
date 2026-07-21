@@ -4,9 +4,10 @@ import { Zap, CheckCircle2, Sparkles, Clock, MapPin } from 'lucide-react';
 import { Restaurant } from '../../types/index';
 import { calculateDistanceInMeters, getFriendlyDistanceText, getBuddyQuote } from '../../utils/index';
 import { FEATURE_FLAGS } from '../../config/featureFlags';
+import { getPriceRangeText } from '../../utils/budget';
 
 interface RestaurantCardProps {
-  restaurant: Restaurant;
+  restaurant?: Restaurant | null;
   type: 'fast' | 'safe' | 'new';
   onSelect: (r: Restaurant) => void;
   onOpenMenu: (r: Restaurant) => void;
@@ -22,6 +23,8 @@ export const RestaurantCard = ({
   onGoogleMapsClick,
   userCoords
 }: RestaurantCardProps) => {
+  if (!restaurant) return null;
+
   const typeLabel = {
     fast: {
       label: '⚡ 趕時間？這間出餐最穩！',
@@ -41,10 +44,7 @@ export const RestaurantCard = ({
   }[type];
 
   const dist = calculateDistanceInMeters(restaurant.coordinates, userCoords);
-  const friendlyPrice =
-    ['100內解決', '150-250左右', '300-450奢華', '500-800高檔', '1000+極限'][
-      restaurant.price - 1
-    ] || '平民價位';
+  const friendlyPrice = getPriceRangeText(restaurant.price);
 
   return (
     <motion.div

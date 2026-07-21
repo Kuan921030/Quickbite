@@ -11,6 +11,7 @@ import {
   User,
   Clock,
   ShoppingCart,
+  ArrowLeft,
 } from 'lucide-react';
 
 // Types & Repositories & Services
@@ -23,6 +24,7 @@ import { recommendationEventService } from './services/recommendationEventServic
 
 // Utilities
 import { calculateDistanceInMeters, getFriendlyDistanceText } from './utils/index';
+import { getPriceRangeText } from './utils/budget';
 
 // Shared Components
 import { BudgetSelector } from './components/BudgetSelector';
@@ -161,7 +163,7 @@ export default function App() {
     }
   }
 
-  const [budget, setBudget] = useState(1); // Default to '~300' (index 1)
+  const [budget, setBudget] = useState(1); // Default to '300 內' (index 1)
   const [distance, setDistance] = useState(1); // Default to '500m' (index 1)
   const [cuisine, setCuisine] = useState('全部'); // Default to '全部' (no cuisine filter)
   const [group, setGroup] = useState('一人食');
@@ -185,6 +187,62 @@ export default function App() {
   const [showRatingFeedback, setShowRatingFeedback] = useState(false);
   const [selectedWaitTime, setSelectedWaitTime] = useState<'10' | '20' | '30'>('20');
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [submittedPreferences, setSubmittedPreferences] = useState({
+    budget: 1,
+    distance: 1,
+    cuisine: '全部',
+    group: '一人食',
+    hurry: false,
+    activeSessionId: null as string | null
+  });
+
+  const isPopStateRef = useRef(false);
+
+  // Initialize browser history on first load
+  useEffect(() => {
+    if (!window.history.state || window.history.state.step !== 'welcome') {
+      window.history.replaceState({ step: 'welcome' }, '');
+    }
+  }, []);
+
+  // Listen to popstate event (browser back/forward)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.step) {
+        isPopStateRef.current = true;
+        setStep(event.state.step);
+      } else {
+        isPopStateRef.current = true;
+        setStep('welcome');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  // Sync state step changes to browser history
+  useEffect(() => {
+    if (isPopStateRef.current) {
+      isPopStateRef.current = false;
+      return;
+    }
+    if (window.history.state && window.history.state.step === step) {
+      return;
+    }
+    window.history.pushState({ step }, '');
+  }, [step]);
+
+  const handleBackToPreferences = () => {
+    if (window.history.state && window.history.state.step === 'recommendations') {
+      window.history.back();
+    } else {
+      setStep('preferences');
+    }
+  };
 
   // Modern decision flow & animator states
   const [isHelpMeDecideOpen, setIsHelpMeDecideOpen] = useState(false);
@@ -259,22 +317,30 @@ export default function App() {
 
   const getRecommendations = useMemo(() => {
     return recommendationService.getRecommendations({
-      budget,
-      distance,
-      cuisine,
-      group,
-      hurry,
+      budget: submittedPreferences.budget,
+      distance: submittedPreferences.distance,
+      cuisine: submittedPreferences.cuisine,
+      group: submittedPreferences.group,
+      hurry: submittedPreferences.hurry,
       refreshKey,
       userCoords,
-      activeSessionId,
+      activeSessionId: submittedPreferences.activeSessionId,
     });
-  }, [budget, distance, cuisine, group, hurry, refreshKey, userCoords, activeSessionId]);
+  }, [submittedPreferences, refreshKey, userCoords]);
 
   // Handle start of recommendation flow from preferences page
   const startRecommendationFlow = () => {
     const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     setActiveSessionId(newSessionId);
     setRefreshKey(0);
+    setSubmittedPreferences({
+      budget,
+      distance,
+      cuisine,
+      group,
+      hurry,
+      activeSessionId: newSessionId
+    });
     setStep('recommendations');
   };
 
@@ -288,11 +354,11 @@ export default function App() {
 
   // Analytics Session and Event Logging Effects
   useEffect(() => {
-    if (step !== 'recommendations' || !currentUser || !activeSessionId) {
+    if (step !== 'recommendations' || !currentUser || !submittedPreferences.activeSessionId) {
       return;
     }
 
-    const currentSessionKey = `${budget}_${distance}_${cuisine}_${group}_${hurry}_${activeSessionId}_${currentUser.username}`;
+    const currentSessionKey = `${submittedPreferences.budget}_${submittedPreferences.distance}_${submittedPreferences.cuisine}_${submittedPreferences.group}_${submittedPreferences.hurry}_${submittedPreferences.activeSessionId}_${currentUser.username}`;
 
     if (lastSessionKeyRef.current !== currentSessionKey) {
       lastSessionKeyRef.current = currentSessionKey;
@@ -305,22 +371,22 @@ export default function App() {
       ].filter((id): id is string => typeof id === 'string');
 
       recommendationEventService.startSession({
-        id: activeSessionId,
+        id: submittedPreferences.activeSessionId,
         userId: currentUser.username,
-        budget,
-        distance,
-        cuisine,
-        group,
-        hurry,
+        budget: submittedPreferences.budget,
+        distance: submittedPreferences.distance,
+        cuisine: submittedPreferences.cuisine,
+        group: submittedPreferences.group,
+        hurry: submittedPreferences.hurry,
         recommendedRestaurantIds
       });
 
       const restaurants = [getRecommendations.fast, getRecommendations.safe, getRecommendations.new];
       restaurants.forEach(r => {
-        if (r && !loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`]) {
-          loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`] = true;
+        if (r && !loggedShownRef.current[`shown_${submittedPreferences.activeSessionId}_${r.restaurantId}`]) {
+          loggedShownRef.current[`shown_${submittedPreferences.activeSessionId}_${r.restaurantId}`] = true;
           recommendationEventService.logEvent({
-            sessionId: activeSessionId,
+            sessionId: submittedPreferences.activeSessionId!,
             userId: currentUser.username,
             restaurantId: r.restaurantId,
             eventType: 'recommendation_shown'
@@ -330,10 +396,10 @@ export default function App() {
     } else {
       const restaurants = [getRecommendations.fast, getRecommendations.safe, getRecommendations.new];
       restaurants.forEach(r => {
-        if (r && !loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`]) {
-          loggedShownRef.current[`shown_${activeSessionId}_${r.restaurantId}`] = true;
+        if (r && !loggedShownRef.current[`shown_${submittedPreferences.activeSessionId}_${r.restaurantId}`]) {
+          loggedShownRef.current[`shown_${submittedPreferences.activeSessionId}_${r.restaurantId}`] = true;
           recommendationEventService.logEvent({
-            sessionId: activeSessionId,
+            sessionId: submittedPreferences.activeSessionId!,
             userId: currentUser.username,
             restaurantId: r.restaurantId,
             eventType: 'recommendation_shown'
@@ -341,7 +407,7 @@ export default function App() {
         }
       });
     }
-  }, [step, currentUser, budget, distance, cuisine, group, hurry, getRecommendations, activeSessionId]);
+  }, [step, currentUser, submittedPreferences, getRecommendations]);
 
   useEffect(() => {
     if (step === 'rating' && lastPicked && currentUser && activeSessionId) {
@@ -393,6 +459,15 @@ export default function App() {
   const handleTriggerHelpMeDecide = () => {
     const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     setActiveSessionId(newSessionId);
+    setRefreshKey(0);
+    setSubmittedPreferences({
+      budget,
+      distance,
+      cuisine,
+      group,
+      hurry,
+      activeSessionId: newSessionId
+    });
 
     const recs = recommendationService.getRecommendations({
       budget,
@@ -721,98 +796,131 @@ export default function App() {
             <div className="px-6 space-y-6">
               <RecommendationsTimeHeader />
 
-              <div className="space-y-1">
-                <h2 className="text-2xl font-black text-neutral-950 tracking-tight">
-                  ✨ 嘿！我幫你縮到這 3 間了
-                </h2>
-                <p className="text-neutral-500 text-xs font-semibold leading-relaxed">
-                  別再滑 Google Maps 排行榜了，這三間閉著眼睛選一間都對味：
-                </p>
-              </div>
+              {(() => {
+                const visibleCount = [getRecommendations.fast, getRecommendations.safe, getRecommendations.new].filter(Boolean).length;
+                return (
+                  <>
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-black text-neutral-950 tracking-tight">
+                        ✨ {visibleCount > 0 ? `嘿！我幫你縮到這 ${visibleCount} 間了` : '😢 找不到符合條件的餐廳'}
+                      </h2>
+                      <p className="text-neutral-500 text-xs font-semibold leading-relaxed">
+                        {visibleCount > 0 
+                          ? '別再滑 Google Maps 排行榜了，這幾間閉著眼睛選一間都對味：' 
+                          : '沒有任何符合你今日預算的店家符合其他篩選條件。'}
+                      </p>
+                    </div>
 
-              <div className="grid gap-6">
-                <RestaurantCard
-                  type="fast"
-                  restaurant={getRecommendations.fast}
-                  onSelect={r => {
-                    setLastPicked(r);
-                    setShowRatingFeedback(false);
-                    setStep('rating');
-                  }}
-                  onOpenMenu={r => {
-                    openMenu(r, true);
-                  }}
-                  onGoogleMapsClick={() => {
-                    if (currentUser && activeSessionId && getRecommendations.fast) {
-                      recommendationEventService.logEvent({
-                        sessionId: activeSessionId,
-                        userId: currentUser.username,
-                        restaurantId: getRecommendations.fast.restaurantId,
-                        eventType: 'google_maps_clicked'
-                      });
-                    }
-                  }}
-                  userCoords={userCoords}
-                />
-                <RestaurantCard
-                  type="safe"
-                  restaurant={getRecommendations.safe}
-                  onSelect={r => {
-                    setLastPicked(r);
-                    setShowRatingFeedback(false);
-                    setStep('rating');
-                  }}
-                  onOpenMenu={r => {
-                    openMenu(r, true);
-                  }}
-                  onGoogleMapsClick={() => {
-                    if (currentUser && activeSessionId && getRecommendations.safe) {
-                      recommendationEventService.logEvent({
-                        sessionId: activeSessionId,
-                        userId: currentUser.username,
-                        restaurantId: getRecommendations.safe.restaurantId,
-                        eventType: 'google_maps_clicked'
-                      });
-                    }
-                  }}
-                  userCoords={userCoords}
-                />
-                <RestaurantCard
-                  type="new"
-                  restaurant={getRecommendations.new}
-                  onSelect={r => {
-                    setLastPicked(r);
-                    setShowRatingFeedback(false);
-                    setStep('rating');
-                  }}
-                  onOpenMenu={r => {
-                    openMenu(r, true);
-                  }}
-                  onGoogleMapsClick={() => {
-                    if (currentUser && activeSessionId && getRecommendations.new) {
-                      recommendationEventService.logEvent({
-                        sessionId: activeSessionId,
-                        userId: currentUser.username,
-                        restaurantId: getRecommendations.new.restaurantId,
-                        eventType: 'google_maps_clicked'
-                      });
-                    }
-                  }}
-                  userCoords={userCoords}
-                />
-              </div>
+                    {visibleCount > 0 && visibleCount < 3 && (
+                      <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 text-center text-xs text-orange-800 font-bold flex items-center justify-center gap-1.5 animate-pulse">
+                        <span>💡 符合條件的選擇較少，已優先保留你的預算限制</span>
+                      </div>
+                    )}
+
+                    <div className="grid gap-6">
+                      {visibleCount === 0 && (
+                        <div className="text-center py-12 px-4 bg-white rounded-2xl border border-orange-100 shadow-sm flex flex-col items-center justify-center space-y-3">
+                          <p className="text-neutral-500 font-bold text-base">😢 找不到符合預算與條件的餐廳</p>
+                          <p className="text-neutral-400 text-xs">建議點擊下方返回按鈕，放寬「距離」或「料理別」再試一次！</p>
+                        </div>
+                      )}
+                      <RestaurantCard
+                        type="fast"
+                        restaurant={getRecommendations.fast}
+                        onSelect={r => {
+                          setLastPicked(r);
+                          setShowRatingFeedback(false);
+                          setStep('rating');
+                        }}
+                        onOpenMenu={r => {
+                          openMenu(r, true);
+                        }}
+                        onGoogleMapsClick={() => {
+                          if (currentUser && activeSessionId && getRecommendations.fast) {
+                            recommendationEventService.logEvent({
+                              sessionId: activeSessionId,
+                              userId: currentUser.username,
+                              restaurantId: getRecommendations.fast.restaurantId,
+                              eventType: 'google_maps_clicked'
+                            });
+                          }
+                        }}
+                        userCoords={userCoords}
+                      />
+                      <RestaurantCard
+                        type="safe"
+                        restaurant={getRecommendations.safe}
+                        onSelect={r => {
+                          setLastPicked(r);
+                          setShowRatingFeedback(false);
+                          setStep('rating');
+                        }}
+                        onOpenMenu={r => {
+                          openMenu(r, true);
+                        }}
+                        onGoogleMapsClick={() => {
+                          if (currentUser && activeSessionId && getRecommendations.safe) {
+                            recommendationEventService.logEvent({
+                              sessionId: activeSessionId,
+                              userId: currentUser.username,
+                              restaurantId: getRecommendations.safe.restaurantId,
+                              eventType: 'google_maps_clicked'
+                            });
+                          }
+                        }}
+                        userCoords={userCoords}
+                      />
+                      <RestaurantCard
+                        type="new"
+                        restaurant={getRecommendations.new}
+                        onSelect={r => {
+                          setLastPicked(r);
+                          setShowRatingFeedback(false);
+                          setStep('rating');
+                        }}
+                        onOpenMenu={r => {
+                          openMenu(r, true);
+                        }}
+                        onGoogleMapsClick={() => {
+                          if (currentUser && activeSessionId && getRecommendations.new) {
+                            recommendationEventService.logEvent({
+                              sessionId: activeSessionId,
+                              userId: currentUser.username,
+                              restaurantId: getRecommendations.new.restaurantId,
+                              eventType: 'google_maps_clicked'
+                            });
+                          }
+                        }}
+                        userCoords={userCoords}
+                      />
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
-            {/* Sticky bottom floating climax bar with the blind selection button */}
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-40 bg-white/95 backdrop-blur-md p-2 px-3 rounded-[2.5rem] shadow-2xl border border-orange-100 flex items-center justify-center animate-in fade-in slide-in-from-bottom duration-300" id="floating-climax-bar-container">
+            {/* Sticky bottom floating climax bar with the back button and blind selection button */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-40 bg-white/95 backdrop-blur-md p-2 px-3 rounded-[2.5rem] shadow-2xl border border-orange-100 flex items-center justify-between gap-2.5 animate-in fade-in slide-in-from-bottom duration-300" id="floating-climax-bar-container">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleBackToPreferences}
+                aria-label="返回修改條件"
+                className="w-12 h-12 rounded-full border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-600 hover:text-black cursor-pointer transition-all flex items-center justify-center shrink-0 shadow-sm active:scale-95"
+                id="floating-back-to-pref-btn"
+                title="修改條件"
+              >
+                <ArrowLeft size={18} />
+              </motion.button>
+
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setIsHelpMePickOneOpen(true)}
-                className="w-full py-4 bg-gradient-to-r from-brand-primary to-[#FF8A00] text-white rounded-[2rem] font-black text-sm min-[375px]:text-base shadow-xl shadow-brand-primary/20 flex items-center justify-center gap-2 cursor-pointer animate-pulse"
+                className="flex-1 py-3.5 bg-gradient-to-r from-brand-primary to-[#FF8A00] text-white rounded-[2rem] font-black text-xs min-[360px]:text-sm shadow-xl shadow-brand-primary/20 flex items-center justify-center gap-1.5 cursor-pointer animate-pulse overflow-hidden whitespace-nowrap"
                 id="floating-blind-decide-btn"
               >
-                <Sparkles size={16} fill="currentColor" />
+                <Sparkles size={14} fill="currentColor" />
                 還是拿不定主意？幫我盲選一個！
               </motion.button>
             </div>
@@ -898,9 +1006,7 @@ export default function App() {
                       </span>
                       <span>•</span>
                       <span className="font-bold text-orange-300">
-                        {['~100', '~300', '~600', '~1000', '~10000'][lastPicked.price - 1] ||
-                          '~100'}
-                        元
+                        {getPriceRangeText(lastPicked.price)}
                       </span>
                     </div>
                   </div>
@@ -1036,7 +1142,11 @@ export default function App() {
                     <button
                       onClick={() => {
                         setShowRatingFeedback(false);
-                        setStep('recommendations');
+                        if (window.history.state && window.history.state.step === 'recommendations') {
+                          window.history.back();
+                        } else {
+                          setStep('recommendations');
+                        }
                       }}
                       className="text-neutral-400 text-xs font-semibold hover:text-neutral-700 transition-colors duration-200 cursor-pointer"
                     >

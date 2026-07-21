@@ -390,7 +390,7 @@ export const MemberCenter = ({
                           💵 偏好價位區間
                         </span>
                         <span className="text-xs font-bold text-neutral-700">
-                          ~300 元等級
+                          300 內等級
                         </span>
                         <p className="text-[10px] text-neutral-400">
                           比例約佔 65%，極致CP值

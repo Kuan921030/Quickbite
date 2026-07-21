@@ -121,7 +121,7 @@ export interface MenuItem {
 }
 
 export interface Recommendation {
-  fast: Restaurant;
-  safe: Restaurant;
-  new: Restaurant;
+  fast?: Restaurant | null;
+  safe?: Restaurant | null;
+  new?: Restaurant | null;
 }

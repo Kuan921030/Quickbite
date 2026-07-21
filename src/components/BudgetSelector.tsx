@@ -7,7 +7,7 @@ interface BudgetSelectorProps {
 
 export const BudgetSelector = ({ value, onChange }: BudgetSelectorProps) => (
   <div className="grid grid-cols-3 gap-1.5" id="budget-selector">
-    {['~100', '~300', '~600'].map((label, index) => (
+    {['150 內', '300 內', '不限'].map((label, index) => (
       <button
         key={index}
         onClick={() => onChange(index)}
