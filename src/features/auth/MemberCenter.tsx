@@ -307,7 +307,7 @@ export const MemberCenter = ({
                 {/* Habits Analysis section */}
                 <div className="space-y-3.5 pt-2">
                   <h3 className="text-sm font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <BarChart3 size={14} /> 個人午餐精準數據分析
+                    <BarChart3 size={14} /> 個人用餐精準數據分析
                   </h3>
 
                   <div className="bg-neutral-50 p-5 rounded-[2rem] border border-neutral-100 space-y-4">
@@ -430,7 +430,7 @@ export const MemberCenter = ({
                     <User size={24} />
                   </div>
                   <h3 className="text-lg font-bold text-neutral-800">
-                    歡迎來到吃午餐
+                    歡迎來到 QuickBite
                   </h3>
                   <p className="text-xs text-neutral-400 max-w-xs mx-auto">
                     透過 Google 帳號登入即可享有個人用餐口味精準分析、集點兌換台大校園與公館商圈特約名店折價券！

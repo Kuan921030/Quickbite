@@ -25,6 +25,7 @@ import { recommendationEventService } from './services/recommendationEventServic
 // Utilities
 import { calculateDistanceInMeters, getFriendlyDistanceText } from './utils/index';
 import { getPriceRangeText } from './utils/budget';
+import { isEligibleForMainMeal } from './utils/mealEligibility';
 
 // Shared Components
 import { BudgetSelector } from './components/BudgetSelector';
@@ -480,7 +481,7 @@ export default function App() {
     });
 
     const options = [recs.fast, recs.safe, recs.new].filter((r): r is Restaurant => r !== null && r !== undefined);
-    const picked = options[Math.floor(Math.random() * options.length)] || restaurantRepository.getAllRestaurants()[0];
+    const picked = options[Math.floor(Math.random() * options.length)] || restaurantRepository.getAllRestaurants().filter(isEligibleForMainMeal)[0];
 
     if (currentUser) {
       const recommendedRestaurantIds = options.map(o => o.restaurantId);
@@ -639,7 +640,7 @@ export default function App() {
                 className="w-full py-5 bg-gradient-to-r from-brand-primary to-[#FF8A00] text-white rounded-[2rem] font-bold text-xl shadow-xl shadow-brand-primary/30 flex items-center justify-center gap-2 cursor-pointer relative overflow-hidden"
               >
                 <span className="absolute right-6 opacity-35 text-2xl">👉</span>
-                🔥 30 秒解決今天的午餐！
+                🔥 30 秒決定今天吃什麼！
               </motion.button>
 
               <p className="text-neutral-400 text-xs font-semibold">

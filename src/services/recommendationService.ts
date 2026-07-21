@@ -2,6 +2,7 @@ import { restaurantRepository } from '../repositories/restaurantRepository';
 import { Restaurant, Recommendation } from '../types/index';
 import { calculateDistanceInMeters, matchCuisine } from '../utils/index';
 import { matchesBudget, BudgetOption } from '../utils/budget';
+import { isEligibleForMainMeal } from '../utils/mealEligibility';
 
 // Simple seed-based pseudo-random number generator
 function createSeededRandom(seedStr: string) {
@@ -69,7 +70,7 @@ export const recommendationService = {
       activeSessionId = null
     } = params;
 
-    const restaurants = restaurantRepository.getAllRestaurants();
+    const restaurants = restaurantRepository.getAllRestaurants().filter(isEligibleForMainMeal);
 
     // 1. Filter base pool of restaurants based on group size
     let basePool = restaurants.filter(r => {

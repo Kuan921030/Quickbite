@@ -5,6 +5,7 @@ import { Restaurant } from '../../types/index';
 import { FEATURE_FLAGS } from '../../config/featureFlags';
 import { restaurantRepository } from '../../repositories/restaurantRepository';
 import { calculateDistanceInMeters, getFriendlyDistanceText } from '../../utils/index';
+import { isEligibleForMainMeal } from '../../utils/mealEligibility';
 
 interface HelpMeDecideAnimatorProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ export function HelpMeDecideAnimator({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [scrollRestaurant, setScrollRestaurant] = useState<Restaurant | null>(null);
 
-  const allRestaurants = restaurantRepository.getAllRestaurants();
+  const allRestaurants = restaurantRepository.getAllRestaurants().filter(isEligibleForMainMeal);
 
   useEffect(() => {
     if (!isOpen || !targetRestaurant) {
