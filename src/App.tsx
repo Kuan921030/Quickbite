@@ -34,6 +34,8 @@ import { HurrySelector } from './components/HurrySelector';
 import { RestaurantCard } from './features/recommendations/RestaurantCard';
 import { MenuModal } from './features/restaurants/MenuModal';
 import { MemberCenter } from './features/auth/MemberCenter';
+import { HelpMeDecideAnimator } from './components/animators/HelpMeDecideAnimator';
+import { HelpMePickOneAnimator } from './components/animators/HelpMePickOneAnimator';
 
 let appRenderCount = 0;
 
@@ -170,6 +172,11 @@ export default function App() {
   const [showRatingFeedback, setShowRatingFeedback] = useState(false);
   const [selectedWaitTime, setSelectedWaitTime] = useState<'10' | '20' | '30'>('20');
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Modern decision flow & animator states
+  const [isHelpMeDecideOpen, setIsHelpMeDecideOpen] = useState(false);
+  const [helpMeDecideTarget, setHelpMeDecideTarget] = useState<Restaurant | null>(null);
+  const [isHelpMePickOneOpen, setIsHelpMePickOneOpen] = useState(false);
 
   // High climax picker states (roulette / slot-machine)
   const [isRolling, setIsRolling] = useState(false);
@@ -370,43 +377,40 @@ export default function App() {
     }
   };
 
-  const handleDecideForMe = () => {
-    if (isRolling) return;
-    setIsRolling(true);
-    setRollingStatusText('正在排除不合你胃口的冷清配方... 🚫');
+  const handleTriggerHelpMeDecide = () => {
+    const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    setActiveSessionId(newSessionId);
 
-    const options = [
-      getRecommendations.fast,
-      getRecommendations.safe,
-      getRecommendations.new,
-    ].filter(Boolean);
-    
-    const allRestaurants = restaurantRepository.getAllRestaurants();
-    const picked =
-      options[Math.floor(Math.random() * options.length)] || allRestaurants[0];
+    const recs = recommendationService.getRecommendations({
+      budget,
+      distance,
+      cuisine,
+      group,
+      hurry,
+      refreshKey: 0,
+      userCoords,
+      activeSessionId: newSessionId,
+    });
 
-    let count = 0;
-    const interval = setInterval(() => {
-      const idx = Math.floor(Math.random() * allRestaurants.length);
-      setRollingRestaurantName(allRestaurants[idx].name);
-      count++;
+    const options = [recs.fast, recs.safe, recs.new].filter((r): r is Restaurant => r !== null && r !== undefined);
+    const picked = options[Math.floor(Math.random() * options.length)] || restaurantRepository.getAllRestaurants()[0];
 
-      if (count === 4) {
-        setRollingStatusText('正在精算公館商圈的排隊等待風險... ⏱️');
-      } else if (count === 8) {
-        setRollingStatusText('正在配對此時適合的天氣與飽足卡路里... 🔥');
-      } else if (count === 12) {
-        setRollingStatusText('命中最佳美味！排除猶豫成功！✨');
-      }
-    }, 110);
+    if (currentUser) {
+      const recommendedRestaurantIds = options.map(o => o.restaurantId);
+      recommendationEventService.startSession({
+        id: newSessionId,
+        userId: currentUser.username,
+        budget,
+        distance,
+        cuisine,
+        group,
+        hurry,
+        recommendedRestaurantIds
+      });
+    }
 
-    setTimeout(() => {
-      clearInterval(interval);
-      setLastPicked(picked);
-      setShowRatingFeedback(false);
-      setIsRolling(false);
-      setStep('rating');
-    }, 1800);
+    setHelpMeDecideTarget(picked);
+    setIsHelpMeDecideOpen(true);
   };
 
   return (
@@ -566,15 +570,29 @@ export default function App() {
             exit={{ opacity: 0, x: -50 }}
             className="p-6 space-y-10 bg-gradient-to-b from-[#FFFDFB] to-[#FFF9F3] min-h-screen"
           >
-            <div className="pt-8">
-              <span className="text-xs bg-[#FFF3EB] text-[#FF5C00] font-extrabold px-3 py-1 rounded-full border border-orange-100 shadow-sm inline-block mb-2">
-                Step 1. 客製你的今日防線
-              </span>
-              <h2 className="text-3xl font-black text-neutral-900 tracking-tight leading-snug">
-                今天中午，
-                <br />
-                <span className="text-neutral-400">想吃什麼感覺的？</span>
-              </h2>
+            <div className="pt-8 flex justify-between items-center gap-4">
+              <div>
+                <span className="text-xs bg-[#FFF3EB] text-[#FF5C00] font-extrabold px-3 py-1 rounded-full border border-orange-100 shadow-sm inline-block mb-2">
+                  Step 1. 客製你的今日防線
+                </span>
+                <h2 className="text-2xl min-[365px]:text-3xl font-black text-neutral-900 tracking-tight leading-snug">
+                  今天中午，
+                  <br />
+                  <span className="text-neutral-400">想吃什麼感覺的？</span>
+                </h2>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleTriggerHelpMeDecide}
+                className="flex flex-col items-center justify-center gap-1.5 p-3.5 px-4 bg-gradient-to-br from-neutral-900 to-neutral-800 text-white rounded-2xl shadow-xl shadow-neutral-950/20 cursor-pointer select-none border-2 border-[#FF8A00] shrink-0 relative overflow-hidden group"
+                id="pref-decide-for-me-btn"
+              >
+                {/* Subtle shine effect */}
+                <div className="absolute inset-0 w-1/2 h-full bg-white/10 skew-x-[-25deg] -translate-x-full group-hover:translate-x-[300%] transition-transform duration-1000 ease-out" />
+                <span className="text-2xl animate-pulse">🎲</span>
+                <span className="text-[11px] font-black tracking-wider whitespace-nowrap text-[#FF8A00]">幫我決定</span>
+              </motion.button>
             </div>
 
             <div className="space-y-8">
@@ -773,42 +791,19 @@ export default function App() {
                   userCoords={userCoords}
                 />
               </div>
-
-              {/* Inline Decide Button */}
-              <div className="pt-2 text-center space-y-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleDecideForMe}
-                  className="w-full py-5 bg-gradient-to-r from-brand-primary to-brand-secondary text-white rounded-[2rem] font-black text-lg shadow-xl shadow-brand-primary/20 flex items-center justify-center gap-3 cursor-pointer"
-                >
-                  <Sparkles size={20} fill="currentColor" />
-                  還是拿不定主意？幫我盲選一個！
-                </motion.button>
-                <p className="text-[11px] text-neutral-400 font-semibold leading-relaxed">
-                  「 咔噠一聲！隨機投擲一枚美食炸彈，閉眼就出發！ 」
-                </p>
-              </div>
             </div>
 
-            {/* Sticky bottom floating climax bar */}
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-40 bg-white/95 backdrop-blur-md p-3 px-4 rounded-[2.5rem] shadow-2xl border border-orange-100 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom duration-300">
-              <div className="text-left pl-2">
-                <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest leading-none mb-1">
-                  解決決定權
-                </p>
-                <p className="text-xs font-extrabold text-[#7C2D12] leading-none">
-                  交給吃貨靈魂指引 🎲
-                </p>
-              </div>
+            {/* Sticky bottom floating climax bar with the blind selection button */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-40 bg-white/95 backdrop-blur-md p-2 px-3 rounded-[2.5rem] shadow-2xl border border-orange-100 flex items-center justify-center animate-in fade-in slide-in-from-bottom duration-300" id="floating-climax-bar-container">
               <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={handleDecideForMe}
-                className="bg-neutral-900 hover:bg-black text-white py-3 px-5 rounded-[2rem] font-black text-xs shadow-md flex items-center gap-1.5 cursor-pointer"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setIsHelpMePickOneOpen(true)}
+                className="w-full py-4 bg-gradient-to-r from-brand-primary to-[#FF8A00] text-white rounded-[2rem] font-black text-sm min-[375px]:text-base shadow-xl shadow-brand-primary/20 flex items-center justify-center gap-2 cursor-pointer animate-pulse"
+                id="floating-blind-decide-btn"
               >
-                <Sparkles size={12} fill="currentColor" className="text-brand-secondary" />
-                幫我決定最棒的！
+                <Sparkles size={16} fill="currentColor" />
+                還是拿不定主意？幫我盲選一個！
               </motion.button>
             </div>
           </motion.div>
@@ -1114,6 +1109,37 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      <HelpMeDecideAnimator
+        isOpen={isHelpMeDecideOpen}
+        onClose={() => setIsHelpMeDecideOpen(false)}
+        targetRestaurant={helpMeDecideTarget}
+        userCoords={userCoords}
+        onSelectRestaurant={(r) => {
+          setLastPicked(r);
+          setShowRatingFeedback(false);
+          setStep('rating');
+          setIsHelpMeDecideOpen(false);
+        }}
+        onOpenMenu={(r) => {
+          setSelectedForMenu(r);
+          setMenuReadOnly(false);
+        }}
+        onRerun={handleTriggerHelpMeDecide}
+      />
+
+      <HelpMePickOneAnimator
+        isOpen={isHelpMePickOneOpen}
+        onClose={() => setIsHelpMePickOneOpen(false)}
+        restaurants={[getRecommendations.fast, getRecommendations.safe, getRecommendations.new].filter((r): r is Restaurant => r !== null && r !== undefined)}
+        userCoords={userCoords}
+        onSelectRestaurant={(r) => {
+          setLastPicked(r);
+          setShowRatingFeedback(false);
+          setStep('rating');
+          setIsHelpMePickOneOpen(false);
+        }}
+      />
     </div>
   );
 }
